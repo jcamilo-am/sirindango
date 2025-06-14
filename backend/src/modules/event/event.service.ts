@@ -1,5 +1,5 @@
-/*import { Injectable } from '@nestjs/common';
-import { EventType } from './types/create-event.type';
+import { Injectable } from '@nestjs/common';
+import { CreateEventType } from './types/create-event.type';
 import { UpdateEventType } from './types/update-event.type';
 import { PrismaService } from 'src/modules/prisma/prisma.service';
 
@@ -7,24 +7,37 @@ import { PrismaService } from 'src/modules/prisma/prisma.service';
 export class EventService {
   constructor(private readonly prisma: PrismaService) {}
 
-  create(data: EventType) {
-    return this.prisma.event.create({ data });
+  private addStatus(event: CreateEventType) {
+    const now = new Date();
+    let status: 'scheduled' | 'active' | 'finished';
+
+    if (now < event.startDate) {
+      status = 'scheduled';
+    } else if (now > event.endDate) {
+      status = 'finished';
+    } else {
+      status = 'active';
+    }
+
+    return { ...event, status };
   }
 
-  findAll() {
-    return this.prisma.event.findMany();
+  create(data: CreateEventType) {
+    return this.prisma.event.create({ data }).then(event => this.addStatus(event));
   }
 
-  findOne(id: number) {
-    return this.prisma.event.findUnique({ where: { id } });
+  async findAll() {
+    const events = await this.prisma.event.findMany();
+    return events.map(event => this.addStatus(event));
   }
 
-  update(id: number, data: UpdateEventType) {
-    return this.prisma.event.update({ where: { id }, data });
+  async findOne(id: number) {
+    const event = await this.prisma.event.findUnique({ where: { id } });
+    return event ? this.addStatus(event) : null;
   }
 
-  remove(id: number) {
-    return this.prisma.event.delete({ where: { id } });
+  async update(id: number, data: UpdateEventType) {
+    const event = await this.prisma.event.update({ where: { id }, data });
+    return this.addStatus(event);
   }
 }
-*/

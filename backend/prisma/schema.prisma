@@ -8,7 +8,7 @@ datasource db {
 }
 
 model Event {
-  id           String    @id @default(uuid())
+  id           Int       @id @default(autoincrement())
   name         String
   location     String
   startDate    DateTime
@@ -19,7 +19,7 @@ model Event {
 }
 
 model Artisan {
-  id             String    @id @default(uuid())
+  id             Int       @id @default(autoincrement())
   name           String
   identification String    @unique
   active         Boolean   @default(true)
@@ -29,28 +29,28 @@ model Artisan {
 }
 
 model Product {
-  id                String    @id @default(uuid())
+  id                Int       @id @default(autoincrement())
   name              String
   price             Float
   availableQuantity Int
   category          String?   // optional
   event             Event     @relation(fields: [eventId], references: [id])
-  eventId           String
+  eventId           Int
   artisan           Artisan   @relation(fields: [artisanId], references: [id])
-  artisanId         String
+  artisanId         Int
   sales             Sale[]
   createdAt         DateTime  @default(now())
 }
 
 model Sale {
-  id              String    @id @default(uuid())
+  id              Int       @id @default(autoincrement())
   quantitySold    Int
-  date            DateTime @default(now())
-  product         Product  @relation(fields: [productId], references: [id])
-  productId       String
-  event           Event    @relation(fields: [eventId], references: [id])
-  eventId         String
-  artisan         Artisan  @relation(fields: [artisanId], references: [id])
-  artisanId       String
-  createdAt       DateTime @default(now())
+  date            DateTime  @default(now())
+  product         Product   @relation(fields: [productId], references: [id])
+  productId       Int
+  event           Event     @relation(fields: [eventId], references: [id])
+  eventId         Int
+  artisan         Artisan   @relation(fields: [artisanId], references: [id])
+  artisanId       Int
+  createdAt       DateTime  @default(now())
 }
