@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateArtisanInput } from './types/create-artisan.type';
 import { UpdateArtisanInput } from './types/update-artisan.type';
@@ -24,8 +24,20 @@ export class ArtisanService {
   }
 
   async remove(id: number) {
-    // Placeholder: No implementado porque aún no existen los módulos de productos/ventas
-    throw new Error('Delete not allowed: This feature will be available when product and sale modules are implemented.');
+    // Verificar si tiene productos asociados
+    const productsCount = await this.prisma.product.count({ where: { artisanId: id } });
+    if (productsCount > 0) {
+      throw new BadRequestException('Cannot delete artisan with associated products.');
+    }
+
+    // Verificar si tiene ventas asociadas
+    const salesCount = await this.prisma.sale.count({ where: { artisanId: id } });
+    if (salesCount > 0) {
+      throw new BadRequestException('Cannot delete artisan with associated sales.');
+    }
+
+    // Si no tiene dependencias, eliminar
+    return this.prisma.artisan.delete({ where: { id } });
   }
 
   async findByIdByEvent(artisanId: number, eventId: number) {

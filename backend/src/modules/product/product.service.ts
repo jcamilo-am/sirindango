@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProductInput } from './types/create-product.type';
 import { UpdateProductInput } from './types/update-product.type';
@@ -38,11 +38,21 @@ export class ProductService {
     return this.prisma.product.findUnique({ where: { id } });
   }
 
-  update(id: number, data: UpdateProductInput) {
-    throw new Error('Method not implemented.'); // TODO: Implement product update logic
+  async update(id: number, data: UpdateProductInput) {
+    // Validar que el producto no tenga ventas asociadas
+    const salesCount = await this.prisma.sale.count({ where: { productId: id } });
+    if (salesCount > 0) {
+      throw new BadRequestException('Cannot update product with associated sales.');
+    }
+    return this.prisma.product.update({ where: { id }, data });
   }
 
-  remove(id: number) {
-    throw new Error('Method not implemented.'); // TODO: Implement product deletion logic
+  async remove(id: number) {
+    // Validar que el producto no tenga ventas asociadas
+    const salesCount = await this.prisma.sale.count({ where: { productId: id } });
+    if (salesCount > 0) {
+      throw new BadRequestException('Cannot delete product with associated sales.');
+    }
+    return this.prisma.product.delete({ where: { id } });
   }
 }
