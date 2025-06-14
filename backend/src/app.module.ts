@@ -5,6 +5,7 @@ import { envSchema } from './config/env.schema';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { PrismaModule } from './modules/prisma/prisma.module';
 import { EventModule } from './modules/event/event.module';
+import { ArtisanModule } from './modules/artisan/artisan.module';
 
 @Module({
   imports: [
@@ -13,7 +14,8 @@ import { EventModule } from './modules/event/event.module';
     validate: zodValidator(envSchema),
     }),
     PrismaModule,
-    EventModule
+    EventModule,
+    ArtisanModule
   ],
   controllers: [],
   providers: [

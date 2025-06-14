@@ -40,4 +40,11 @@ export class EventService {
     const event = await this.prisma.event.update({ where: { id }, data });
     return this.addStatus(event);
   }
+
+  async findByName(name: string) {
+    const events = await this.prisma.event.findMany({
+      where: { name: { contains: name, mode: 'insensitive' } },
+    });
+    return events.map(event => this.addStatus(event));
+  }
 }

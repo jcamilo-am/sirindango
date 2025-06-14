@@ -1,4 +1,4 @@
-/*import { Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateArtisanInput } from './types/create-artisan.type';
 import { UpdateArtisanInput } from './types/update-artisan.type';
@@ -23,7 +23,19 @@ export class ArtisanService {
     return this.prisma.artisan.update({ where: { id }, data });
   }
 
-  remove(id: number) {
-    return this.prisma.artisan.delete({ where: { id } });
+  async remove(id: number) {
+    // Placeholder: No implementado porque aún no existen los módulos de productos/ventas
+    throw new Error('Delete not allowed: This feature will be available when product and sale modules are implemented.');
   }
-}*/
+
+  async findByIdByEvent(artisanId: number, eventId: number) {
+    const artisan = await this.prisma.artisan.findUnique({
+      where: { id: artisanId },
+      include: {
+        products: { where: { eventId } },
+        sales: { where: { eventId } },
+      },
+    });
+    return artisan;
+  }
+}

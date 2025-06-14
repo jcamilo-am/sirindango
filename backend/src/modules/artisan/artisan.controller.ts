@@ -1,4 +1,4 @@
-/*import { Controller, Get, Post, Body, Param, Patch, Delete, ParseIntPipe } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Patch, Delete, ParseIntPipe } from '@nestjs/common';
 import { ArtisanService } from './artisan.service';
 import { CreateArtisanDto } from './dto/create-artisan.dto';
 import { UpdateArtisanDto } from './dto/update-artisan.dto';
@@ -35,4 +35,12 @@ export class ArtisanController {
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.artisanService.remove(id);
   }
-}*/
+
+  @Get(':id/by-event/:eventId')
+  async findByIdByEvent(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('eventId', ParseIntPipe) eventId: number,
+  ) {
+    return this.artisanService.findByIdByEvent(id, eventId);
+  }
+}
