@@ -7,50 +7,50 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Evento {
+model Event {
   id           String    @id @default(uuid())
-  nombre       String
-  lugar        String
-  fechaInicio  DateTime
-  fechaFin     DateTime
-  productos    Producto[]
-  ventas       Venta[]
+  name         String
+  location     String
+  startDate    DateTime
+  endDate      DateTime
+  products     Product[]
+  sales        Sale[]
   createdAt    DateTime  @default(now())
 }
 
-model Artesano {
+model Artisan {
   id             String    @id @default(uuid())
-  nombre         String
-  identificacion String    @unique
-  activo         Boolean   @default(true)
-  productos      Producto[]
-  ventas         Venta[]
+  name           String
+  identification String    @unique
+  active         Boolean   @default(true)
+  products       Product[]
+  sales          Sale[]
   createdAt      DateTime  @default(now())
 }
 
-model Producto {
+model Product {
   id                String    @id @default(uuid())
-  nombre            String
-  precio            Float
-  cantidadDisponible Int
-  categoria         String?   // opcional
-  evento            Evento    @relation(fields: [eventoId], references: [id])
-  eventoId          String
-  artesano          Artesano  @relation(fields: [artesanoId], references: [id])
-  artesanoId        String
-  ventas            Venta[]
+  name              String
+  price             Float
+  availableQuantity Int
+  category          String?   // optional
+  event             Event     @relation(fields: [eventId], references: [id])
+  eventId           String
+  artisan           Artisan   @relation(fields: [artisanId], references: [id])
+  artisanId         String
+  sales             Sale[]
   createdAt         DateTime  @default(now())
 }
 
-model Venta {
+model Sale {
   id              String    @id @default(uuid())
-  cantidadVendida Int
-  fecha           DateTime @default(now())
-  producto        Producto @relation(fields: [productoId], references: [id])
-  productoId      String
-  evento          Evento   @relation(fields: [eventoId], references: [id])
-  eventoId        String
-  artesano        Artesano @relation(fields: [artesanoId], references: [id])
-  artesanoId      String
+  quantitySold    Int
+  date            DateTime @default(now())
+  product         Product  @relation(fields: [productId], references: [id])
+  productId       String
+  event           Event    @relation(fields: [eventId], references: [id])
+  eventId         String
+  artisan         Artisan  @relation(fields: [artisanId], references: [id])
+  artisanId       String
   createdAt       DateTime @default(now())
 }
