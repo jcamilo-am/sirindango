@@ -2,6 +2,7 @@ import { Body, Controller, Get, Post, Param, Patch, Delete, ParseIntPipe, Query 
 import { EventService } from './event.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
+import { EventSummaryDto } from './dto/event-summary.dto';
 
 @Controller('events')
 export class EventController {
@@ -30,5 +31,10 @@ export class EventController {
   @Get('search/by-name')
   findByName(@Query('name') name: string) {
     return this.eventService.findByName(name);
+  }
+
+  @Get(':id/summary')
+  async getEventSummary(@Param('id', ParseIntPipe) id: number): Promise<EventSummaryDto[]> {
+    return this.eventService.getEventSummary(id);
   }
 }
