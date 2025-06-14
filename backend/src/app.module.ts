@@ -7,6 +7,7 @@ import { PrismaModule } from './modules/prisma/prisma.module';
 import { EventModule } from './modules/event/event.module';
 import { ArtisanModule } from './modules/artisan/artisan.module';
 import { ProductModule } from './modules/product/product.module';
+import { SaleModule } from './modules/sale/sale.module';
 
 @Module({
   imports: [
@@ -17,7 +18,8 @@ import { ProductModule } from './modules/product/product.module';
     PrismaModule,
     EventModule,
     ArtisanModule,
-    ProductModule
+    ProductModule,
+    SaleModule
   ],
   controllers: [],
   providers: [

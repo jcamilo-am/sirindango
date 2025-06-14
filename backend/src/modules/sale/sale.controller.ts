@@ -1,4 +1,4 @@
-/*import { Controller, Get, Post, Body, Param, Patch, Delete, ParseIntPipe } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Patch, Delete, ParseIntPipe, Query } from '@nestjs/common';
 import { SaleService } from './sale.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { UpdateSaleDto } from './dto/update-sale.dto';
@@ -13,8 +13,16 @@ export class SaleController {
   }
 
   @Get()
-  findAll() {
-    return this.saleService.findAll();
+  findAll(
+    @Query('eventId') eventId?: string,
+    @Query('artisanId') artisanId?: string,
+    @Query('order') order?: 'date' | 'quantity'
+  ) {
+    return this.saleService.findAll({
+      eventId: eventId ? Number(eventId) : undefined,
+      artisanId: artisanId ? Number(artisanId) : undefined,
+      order,
+    });
   }
 
   @Get(':id')
@@ -22,13 +30,4 @@ export class SaleController {
     return this.saleService.findOne(id);
   }
 
-  @Patch(':id')
-  update(@Param('id', ParseIntPipe) id: number, @Body() data: UpdateSaleDto) {
-    return this.saleService.update(id, data);
-  }
-
-  @Delete(':id')
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.saleService.remove(id);
-  }
-}*/
+}
