@@ -1,0 +1,56 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Evento {
+  id           String    @id @default(uuid())
+  nombre       String
+  lugar        String
+  fechaInicio  DateTime
+  fechaFin     DateTime
+  productos    Producto[]
+  ventas       Venta[]
+  createdAt    DateTime  @default(now())
+}
+
+model Artesano {
+  id             String    @id @default(uuid())
+  nombre         String
+  identificacion String    @unique
+  activo         Boolean   @default(true)
+  productos      Producto[]
+  ventas         Venta[]
+  createdAt      DateTime  @default(now())
+}
+
+model Producto {
+  id                String    @id @default(uuid())
+  nombre            String
+  precio            Float
+  cantidadDisponible Int
+  categoria         String?   // opcional
+  evento            Evento    @relation(fields: [eventoId], references: [id])
+  eventoId          String
+  artesano          Artesano  @relation(fields: [artesanoId], references: [id])
+  artesanoId        String
+  ventas            Venta[]
+  createdAt         DateTime  @default(now())
+}
+
+model Venta {
+  id              String    @id @default(uuid())
+  cantidadVendida Int
+  fecha           DateTime @default(now())
+  producto        Producto @relation(fields: [productoId], references: [id])
+  productoId      String
+  evento          Evento   @relation(fields: [eventoId], references: [id])
+  eventoId        String
+  artesano        Artesano @relation(fields: [artesanoId], references: [id])
+  artesanoId      String
+  createdAt       DateTime @default(now())
+}

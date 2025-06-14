@@ -2,10 +2,12 @@
 /backend/node_modules
 /backend/dist
 /backend/.env
-/backend/prisma
+/backend/prisma/migrations
 
 
 # Frontend
 /frontend/node_modules
 /frontend/dist
 /frontend/.env
+
+/generated/prisma
