@@ -6,6 +6,7 @@ import { ZodValidationPipe } from 'nestjs-zod';
 import { PrismaModule } from './modules/prisma/prisma.module';
 import { EventModule } from './modules/event/event.module';
 import { ArtisanModule } from './modules/artisan/artisan.module';
+import { ProductModule } from './modules/product/product.module';
 
 @Module({
   imports: [
@@ -15,7 +16,8 @@ import { ArtisanModule } from './modules/artisan/artisan.module';
     }),
     PrismaModule,
     EventModule,
-    ArtisanModule
+    ArtisanModule,
+    ProductModule
   ],
   controllers: [],
   providers: [
