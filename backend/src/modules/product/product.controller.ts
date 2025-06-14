@@ -1,4 +1,4 @@
-/*import { Controller, Get, Post, Body, Param, Patch, Delete, ParseIntPipe } from '@nestjs/common';
+import { Controller, Get, Query, Post, Body, Param, Patch, Delete, ParseIntPipe } from '@nestjs/common';
 import { ProductService } from './product.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -13,8 +13,16 @@ export class ProductController {
   }
 
   @Get()
-  findAll() {
-    return this.productService.findAll();
+  findAll(
+    @Query('eventId') eventId?: string,
+    @Query('artisanId') artisanId?: string,
+    @Query('order') order?: 'name' | 'quantity'
+  ) {
+    return this.productService.findAll({
+      eventId: eventId ? Number(eventId) : undefined,
+      artisanId: artisanId ? Number(artisanId) : undefined,
+      order,
+    });
   }
 
   @Get(':id')
@@ -31,4 +39,4 @@ export class ProductController {
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.productService.remove(id);
   }
-}*/
+}

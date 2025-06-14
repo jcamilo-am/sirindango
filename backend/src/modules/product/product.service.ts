@@ -1,7 +1,13 @@
-/*import { Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProductInput } from './types/create-product.type';
 import { UpdateProductInput } from './types/update-product.type';
+
+type FindAllOptions = {
+  eventId?: number;
+  artisanId?: number;
+  order?: 'name' | 'quantity';
+};
 
 @Injectable()
 export class ProductService {
@@ -11,8 +17,21 @@ export class ProductService {
     return this.prisma.product.create({ data });
   }
 
-  findAll() {
-    return this.prisma.product.findMany();
+  findAll(options: FindAllOptions = {}) {
+    const { eventId, artisanId, order } = options;
+
+    const where: any = {};
+    if (eventId) where.eventId = eventId;
+    if (artisanId) where.artisanId = artisanId;
+
+    let orderBy: any = undefined;
+    if (order === 'name') orderBy = { name: 'asc' };
+    if (order === 'quantity') orderBy = { availableQuantity: 'asc' };
+
+    return this.prisma.product.findMany({
+      where,
+      orderBy,
+    });
   }
 
   findOne(id: number) {
@@ -20,10 +39,10 @@ export class ProductService {
   }
 
   update(id: number, data: UpdateProductInput) {
-    return this.prisma.product.update({ where: { id }, data });
+    throw new Error('Method not implemented.'); // TODO: Implement product update logic
   }
 
   remove(id: number) {
-    return this.prisma.product.delete({ where: { id } });
+    throw new Error('Method not implemented.'); // TODO: Implement product deletion logic
   }
-}*/
+}
