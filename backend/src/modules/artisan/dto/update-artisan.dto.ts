@@ -1,4 +1,4 @@
-/*import { createZodDto } from 'nestjs-zod';
+import { createZodDto } from 'nestjs-zod';
 import { UpdateArtisanSchema } from '../schemas/update-artisan.schema';
 
-export class UpdateArtisanDto extends createZodDto(UpdateArtisanSchema) {}*/
+export class UpdateArtisanDto extends createZodDto(UpdateArtisanSchema) {}

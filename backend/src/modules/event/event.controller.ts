@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Param, Patch, Delete, ParseIntPipe } from '@nestjs/common';
+import { Body, Controller, Get, Post, Param, Patch, Delete, ParseIntPipe, Query } from '@nestjs/common';
 import { EventService } from './event.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
@@ -25,5 +25,10 @@ export class EventController {
   @Patch(':id')
   update(@Param('id', ParseIntPipe) id: number, @Body() body: UpdateEventDto) {
     return this.eventService.update(id, body);
+  }
+
+  @Get('search/by-name')
+  findByName(@Query('name') name: string) {
+    return this.eventService.findByName(name);
   }
 }
