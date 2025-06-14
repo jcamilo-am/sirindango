@@ -114,8 +114,8 @@ export class EventService {
       }));
 
       return {
-        memberId: artisan.id,
-        memberName: artisan.name,
+        artisanId: artisan.id,
+        artisanName: artisan.name,
         totalRegisteredProducts,
         totalSoldProducts,
         totalRevenue,

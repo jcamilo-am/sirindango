@@ -2,12 +2,7 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProductInput } from './types/create-product.type';
 import { UpdateProductInput } from './types/update-product.type';
-
-type FindAllOptions = {
-  eventId?: number;
-  artisanId?: number;
-  order?: 'name' | 'quantity';
-};
+import { FindAllOptions } from './types/filters.type';
 
 @Injectable()
 export class ProductService {

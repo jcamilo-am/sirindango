@@ -6,8 +6,8 @@ export class ProductSummaryDto {
 }
 
 export class EventSummaryDto {
-  memberId: number;
-  memberName: string;
+  artisanId: number;
+  artisanName: string;
   totalRegisteredProducts: number;
   totalSoldProducts: number;
   totalRevenue: number;
