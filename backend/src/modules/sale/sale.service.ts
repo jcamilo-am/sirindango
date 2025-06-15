@@ -13,23 +13,22 @@ type FindAllOptions = {
 export class SaleService {
   constructor(private prisma: PrismaService) {}
 
+  // Crea una venta, valida existencia y stock, el filtro global maneja errores de unicidad
   async create(data: CreateSaleInput) {
-    // Validar existencia de producto, evento y artesano
+    // Valida existencia de producto, evento y artesano
     const product = await this.prisma.product.findUnique({ where: { id: data.productId } });
-    if (!product) throw new NotFoundException('Product not found');
-
+    if (!product) throw new NotFoundException('El producto no existe');
     const event = await this.prisma.event.findUnique({ where: { id: data.eventId } });
-    if (!event) throw new NotFoundException('Event not found');
-
+    if (!event) throw new NotFoundException('El evento no existe');
     const artisan = await this.prisma.artisan.findUnique({ where: { id: data.artisanId } });
-    if (!artisan) throw new NotFoundException('Artisan not found');
+    if (!artisan) throw new NotFoundException('El artesano no existe');
 
-    // Validar stock suficiente
+    // Valida stock suficiente
     if (product.availableQuantity < data.quantitySold) {
-      throw new BadRequestException('Not enough stock available');
+      throw new BadRequestException('No hay suficiente stock disponible');
     }
 
-    // Registrar la venta con fecha = now()
+    // Registra la venta con fecha actual
     const sale = await this.prisma.sale.create({
       data: {
         ...data,
@@ -37,7 +36,7 @@ export class SaleService {
       },
     });
 
-    // Actualizar cantidadDisponible del producto (descontar la venta)
+    // Actualiza la cantidad disponible del producto
     await this.prisma.product.update({
       where: { id: data.productId },
       data: {
@@ -48,24 +47,25 @@ export class SaleService {
     return sale;
   }
 
+  // Busca ventas con filtros opcionales
   async findAll(options: FindAllOptions = {}) {
     const { eventId, artisanId, order } = options;
-
     const where: any = {};
     if (eventId) where.eventId = eventId;
     if (artisanId) where.artisanId = artisanId;
-
     let orderBy: any = undefined;
     if (order === 'date') orderBy = { date: 'asc' };
     if (order === 'quantity') orderBy = { quantitySold: 'asc' };
-
     return this.prisma.sale.findMany({
       where,
       orderBy,
     });
   }
 
-  findOne(id: number) {
-    return this.prisma.sale.findUnique({ where: { id } });
+  // Busca una venta por ID
+  async findOne(id: number) {
+    const sale = await this.prisma.sale.findUnique({ where: { id } });
+    if (!sale) throw new NotFoundException('La venta no existe');
+    return sale;
   }
 }

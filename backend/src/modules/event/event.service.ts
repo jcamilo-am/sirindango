@@ -8,40 +8,52 @@ import { EventSummaryDto, ProductSummaryDto } from './dto/event-summary.dto';
 export class EventService {
   constructor(private readonly prisma: PrismaService) {}
 
+  // Agrega el estado al evento según la fecha actual
   private addStatus(event: CreateEventType) {
     const now = new Date();
     let status: 'scheduled' | 'active' | 'finished';
-
-    if (now < event.startDate) {
-      status = 'scheduled';
-    } else if (now > event.endDate) {
-      status = 'finished';
-    } else {
-      status = 'active';
-    }
-
+    if (now < event.startDate) status = 'scheduled';
+    else if (now > event.endDate) status = 'finished';
+    else status = 'active';
     return { ...event, status };
   }
 
-  create(data: CreateEventType) {
-    return this.prisma.event.create({ data }).then(event => this.addStatus(event));
+  // Crea un evento y agrega el estado
+  async create(data: CreateEventType) {
+    try {
+      const event = await this.prisma.event.create({ data });
+      return this.addStatus(event);
+    } catch (error) {
+      // El filtro global manejará errores de unicidad, etc.
+      throw error;
+    }
   }
 
+  // Devuelve todos los eventos con su estado
   async findAll() {
     const events = await this.prisma.event.findMany();
     return events.map(event => this.addStatus(event));
   }
 
+  // Busca un evento por ID, lanza NotFoundException si no existe
   async findOne(id: number) {
     const event = await this.prisma.event.findUnique({ where: { id } });
-    return event ? this.addStatus(event) : null;
-  }
-
-  async update(id: number, data: UpdateEventType) {
-    const event = await this.prisma.event.update({ where: { id }, data });
+    if (!event) throw new NotFoundException('El evento no existe');
     return this.addStatus(event);
   }
 
+  // Actualiza un evento, lanza NotFoundException si no existe
+  async update(id: number, data: UpdateEventType) {
+    try {
+      const event = await this.prisma.event.update({ where: { id }, data });
+      return this.addStatus(event);
+    } catch (error) {
+      // Si el evento no existe, el filtro global lo maneja (P2025)
+      throw error;
+    }
+  }
+
+  // Busca eventos por nombre (insensible a mayúsculas/minúsculas)
   async findByName(name: string) {
     const events = await this.prisma.event.findMany({
       where: { name: { contains: name, mode: 'insensitive' } },
@@ -49,30 +61,27 @@ export class EventService {
     return events.map(event => this.addStatus(event));
   }
 
+  // Devuelve el resumen del evento, lanza NotFoundException si no existe
   async getEventSummary(eventId: number): Promise<EventSummaryDto[]> {
-    // 1. Check if event exists
+    // Verifica si el evento existe
     const event = await this.prisma.event.findUnique({ where: { id: eventId } });
-    if (!event) throw new NotFoundException('Event not found');
+    if (!event) throw new NotFoundException('El evento no existe');
 
-    // 2. Get all artisans with products in this event
+    // Obtiene artesanos con productos en el evento
     const artisans = await this.prisma.artisan.findMany({
-      where: {
-        products: { some: { eventId } }
-      }
+      where: { products: { some: { eventId } } }
     });
 
-    // 3. Get all products for this event
+    // Obtiene productos del evento
     const products = await this.prisma.product.findMany({
       where: { eventId },
       include: { artisan: true }
     });
 
-    // 4. Get all sales for this event
-    const sales = await this.prisma.sale.findMany({
-      where: { eventId }
-    });
+    // Obtiene ventas del evento
+    const sales = await this.prisma.sale.findMany({ where: { eventId } });
 
-    // 5. Build general product summary (total sold per product)
+    // Calcula resumen general de productos vendidos
     const generalProductSummaryMap: Record<number, ProductSummaryDto> = {};
     for (const sale of sales) {
       const product = products.find(p => p.id === sale.productId);
@@ -87,7 +96,7 @@ export class EventService {
       generalProductSummaryMap[product.id].quantitySold! += sale.quantitySold;
     }
 
-    // 6. Build summary per artisan
+    // Construye resumen por artesano
     const summary: EventSummaryDto[] = artisans.map(artisan => {
       const artisanProducts = products.filter(p => p.artisanId === artisan.id);
       const artisanSales = sales.filter(s => s.artisanId === artisan.id);
