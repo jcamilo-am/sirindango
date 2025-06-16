@@ -7,7 +7,10 @@ import {
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { ZodError } from 'zod';
-import { Prisma } from '@prisma/client';
+import {
+  PrismaClientKnownRequestError,
+  PrismaClientUnknownRequestError,
+} from '@prisma/client/runtime/library';
 
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
@@ -43,7 +46,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     }
 
     // Errores de Prisma (conocidos)
-    else if (exception instanceof Prisma.PrismaClientKnownRequestError) {
+    else if (exception instanceof PrismaClientKnownRequestError) {
       switch (exception.code) {
         case 'P2002':
           status = HttpStatus.CONFLICT;
@@ -61,7 +64,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     }
 
     // Prisma - errores desconocidos del motor
-    else if (exception instanceof Prisma.PrismaClientUnknownRequestError) {
+    else if (exception instanceof PrismaClientUnknownRequestError) {
       status = HttpStatus.INTERNAL_SERVER_ERROR;
       message = 'Error desconocido de base de datos';
     }

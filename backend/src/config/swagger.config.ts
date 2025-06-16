@@ -7,10 +7,6 @@ export function setupSwagger(app: INestApplication): void {
     .setTitle('API del Comercio Artesanal')
     .setDescription('Documentación oficial del backend')
     .setVersion('1.0')
-    .addTag('Eventos')
-    .addTag('Productos')
-    .addTag('Ventas')
-    .addTag('Artesanos')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

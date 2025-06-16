@@ -28,23 +28,27 @@ export class SaleService {
       throw new BadRequestException('No hay suficiente stock disponible');
     }
 
-    // Registra la venta con fecha actual
-    const sale = await this.prisma.sale.create({
-      data: {
-        ...data,
-        date: new Date(),
-      },
-    });
+    return await this.prisma.$transaction(async (tx) => {
+      // Registra la venta
+      const sale = await tx.sale.create({
+        data: {
+          ...data,
+          date: new Date(),
+        },
+      });
 
-    // Actualiza la cantidad disponible del producto
-    await this.prisma.product.update({
-      where: { id: data.productId },
-      data: {
-        availableQuantity: product.availableQuantity - data.quantitySold,
-      },
-    });
+      // Actualiza la cantidad disponible del producto
+      await tx.product.update({
+        where: { id: data.productId },
+        data: {
+          availableQuantity: {
+            decrement: data.quantitySold,
+          },
+        },
+      });
 
-    return sale;
+      return sale;
+    });
   }
 
   // Busca ventas con filtros opcionales
