@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProductInput } from './types/create-product.type';
 import { UpdateProductInput } from './types/update-product.type';
@@ -8,46 +8,61 @@ import { FindAllOptions } from './types/filters.type';
 export class ProductService {
   constructor(private prisma: PrismaService) {}
 
-  create(data: CreateProductInput) {
-    return this.prisma.product.create({ data });
+  // Crea un producto, el filtro global maneja errores de unicidad
+  async create(data: CreateProductInput) {
+    try {
+      return await this.prisma.product.create({ data });
+    } catch (error) {
+      throw error;
+    }
   }
 
-  findAll(options: FindAllOptions = {}) {
+  // Busca productos con filtros opcionales
+  async findAll(options: FindAllOptions = {}) {
     const { eventId, artisanId, order } = options;
-
     const where: any = {};
     if (eventId) where.eventId = eventId;
     if (artisanId) where.artisanId = artisanId;
-
     let orderBy: any = undefined;
     if (order === 'name') orderBy = { name: 'asc' };
     if (order === 'quantity') orderBy = { availableQuantity: 'asc' };
-
-    return this.prisma.product.findMany({
-      where,
-      orderBy,
-    });
+    return await this.prisma.product.findMany({ where, orderBy });
   }
 
-  findOne(id: number) {
-    return this.prisma.product.findUnique({ where: { id } });
+  // Busca un producto por ID, lanza NotFoundException si no existe
+  async findOne(id: number) {
+    const product = await this.prisma.product.findUnique({ where: { id } });
+    if (!product) throw new NotFoundException('El producto no existe');
+    return product;
   }
 
+  // Actualiza un producto si no tiene ventas asociadas
   async update(id: number, data: UpdateProductInput) {
-    // Validar que el producto no tenga ventas asociadas
+    // Verifica si el producto tiene ventas asociadas
     const salesCount = await this.prisma.sale.count({ where: { productId: id } });
     if (salesCount > 0) {
-      throw new BadRequestException('Cannot update product with associated sales.');
+      throw new BadRequestException('No se puede actualizar un producto con ventas asociadas.');
     }
-    return this.prisma.product.update({ where: { id }, data });
+    try {
+      return await this.prisma.product.update({ where: { id }, data });
+    } catch (error) {
+      // Si no existe, el filtro global lo maneja (P2025)
+      throw error;
+    }
   }
 
+  // Elimina un producto si no tiene ventas asociadas
   async remove(id: number) {
-    // Validar que el producto no tenga ventas asociadas
+    // Verifica si el producto tiene ventas asociadas
     const salesCount = await this.prisma.sale.count({ where: { productId: id } });
     if (salesCount > 0) {
-      throw new BadRequestException('Cannot delete product with associated sales.');
+      throw new BadRequestException('No se puede eliminar un producto con ventas asociadas.');
     }
-    return this.prisma.product.delete({ where: { id } });
+    try {
+      return await this.prisma.product.delete({ where: { id } });
+    } catch (error) {
+      // Si no existe, el filtro global lo maneja (P2025)
+      throw error;
+    }
   }
 }
