@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useStore } from '@/lib/store';
+import { useStore, type Event } from '@/lib/store';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { Plus, Edit2, Trash2, Calendar } from 'lucide-react';
@@ -17,18 +17,20 @@ import { SiteHeader } from "@/app/dashboard/components/site-header";
 interface EventForm {
   name: string;
   location: string;
-  date: string;
+  startDate: string;
+  endDate: string;
 }
 
 export default function EventosPage() {
   const { events } = useStore();
   // Para demo, solo lectura. Si quieres agregar lógica de agregar/editar, deberás extender el store.
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingEvent, setEditingEvent] = useState<string | null>(null);
+  const [editingEvent, setEditingEvent] = useState<number | null>(null);
   const [formData, setFormData] = useState<EventForm>({
     name: '',
     location: '',
-    date: ''
+    startDate: '',
+    endDate: ''
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -36,20 +38,21 @@ export default function EventosPage() {
     toast.success('Funcionalidad de agregar/editar evento solo demo.');
     setIsDialogOpen(false);
     setEditingEvent(null);
-    setFormData({ name: '', location: '', date: '' });
+    setFormData({ name: '', location: '', startDate: '', endDate: '' });
   };
 
-  const handleEdit = (event: any) => {
+  const handleEdit = (eventData: Event) => {
     setFormData({
-      name: event.name,
-      location: event.location,
-      date: event.date
+      name: eventData.name,
+      location: eventData.location,
+      startDate: eventData.startDate.toISOString().split('T')[0],
+      endDate: eventData.endDate.toISOString().split('T')[0]
     });
-    setEditingEvent(event.id);
+    setEditingEvent(eventData.id);
     setIsDialogOpen(true);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = (id: number) => {
     toast.success('Funcionalidad de eliminar evento solo demo.');
   };
 
@@ -106,12 +109,22 @@ export default function EventosPage() {
                       />
                     </div>
                     <div>
-                      <Label htmlFor="date" className="mb-2 block">Fecha *</Label>
+                      <Label htmlFor="startDate" className="mb-2 block">Fecha de Inicio *</Label>
                       <Input
-                        id="date"
+                        id="startDate"
                         type="date"
-                        value={formData.date}
-                        onChange={(e) => setFormData({...formData, date: e.target.value})}
+                        value={formData.startDate}
+                        onChange={(e) => setFormData({...formData, startDate: e.target.value})}
+                        className="text-base"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="endDate" className="mb-2 block">Fecha de Fin *</Label>
+                      <Input
+                        id="endDate"
+                        type="date"
+                        value={formData.endDate}
+                        onChange={(e) => setFormData({...formData, endDate: e.target.value})}
                         className="text-base"
                       />
                     </div>
@@ -149,7 +162,8 @@ export default function EventosPage() {
                           </h3>
                           <div className="flex flex-wrap gap-2 mb-2">
                             <span className="text-sm text-gray-600">Ubicación: {event.location}</span>
-                            <span className="text-sm text-gray-600">Fecha: {event.date}</span>
+                            <span className="text-sm text-gray-600">Inicio: {event.startDate.toLocaleDateString()}</span>
+                            <span className="text-sm text-gray-600">Fin: {event.endDate.toLocaleDateString()}</span>
                           </div>
                         </div>
                         <div className="flex gap-2">

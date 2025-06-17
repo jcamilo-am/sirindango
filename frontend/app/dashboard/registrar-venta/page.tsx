@@ -1,5 +1,5 @@
 "use client"
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,6 +14,9 @@ import { Separator } from '@/components/ui/separator';
 import { AppSidebar } from "@/app/dashboard/components/app-sidebar";
 import { SidebarProvider, SidebarInset } from "@/app/dashboard/components/sidebar";
 import { SiteHeader } from "@/app/dashboard/components/site-header";
+import { getProducts, getEvents, getArtisans, createSale } from '@/lib/api';
+import { CreateSaleSchema } from '@/lib/schemas';
+import type { Product, Event, Artisan } from '@/lib/store';
 
 interface SaleItem {
   productId: string;
@@ -21,21 +24,21 @@ interface SaleItem {
 }
 
 export default function RegistrarVentaPage() {
-  const { 
-    products, 
-    events, 
-    artisans, 
-    addSale,
-    getProductsByEvent
-  } = useStore();
-  
+  // Estados locales para los datos
+  const [products, setProducts] = useState<Product[]>([]);
+  const [events, setEvents] = useState<Event[]>([]);
+  const [artisans, setArtisans] = useState<Artisan[]>([]);
   const [selectedEvent, setSelectedEvent] = useState('');
   const [selectedArtisan, setSelectedArtisan] = useState('');
   const [saleItems, setSaleItems] = useState<SaleItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [loadingEvents, setLoadingEvents] = useState(false);
+  const [loadingArtisans, setLoadingArtisans] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const availableProducts = products.filter(product => {
-    if (selectedEvent && product.eventId !== selectedEvent) return false;
-    if (selectedArtisan && product.artisanId !== selectedArtisan) return false;
+    if (selectedEvent && product.eventId.toString() !== selectedEvent) return false;
+    if (selectedArtisan && product.artisanId.toString() !== selectedArtisan) return false;
     return true;
   });
 
@@ -65,62 +68,116 @@ export default function RegistrarVentaPage() {
     return item ? item.quantitySold.toString() : '';
   };
 
-  const handleRegisterSales = () => {
+  const fetchProducts = async () => {
+    setLoading(true);
+    try {
+      const data: Product[] = await getProducts();
+      setProducts(data);
+    } catch (err) {
+      toast.error('Error al cargar productos');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchEvents = async () => {
+    setLoadingEvents(true);
+    try {
+      const data: Event[] = await getEvents();
+      setEvents(data);
+    } catch (err) {
+      toast.error('Error al cargar eventos');
+    } finally {
+      setLoadingEvents(false);
+    }
+  };
+
+  const fetchArtisans = async () => {
+    setLoadingArtisans(true);
+    try {
+      const data: Artisan[] = await getArtisans();
+      setArtisans(data);
+    } catch (err) {
+      toast.error('Error al cargar artesanas');
+    } finally {
+      setLoadingArtisans(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchProducts();
+    fetchEvents();
+    fetchArtisans();
+  }, []);
+
+  const handleRegisterSales = async () => {
     if (!selectedEvent || !selectedArtisan) {
       toast.error('Por favor seleccione una feria y artesana');
       return;
     }
-
     if (saleItems.length === 0) {
       toast.error('Por favor agregue al menos un producto con cantidad');
       return;
     }
-
-    // Validate quantities
-    const invalidItems = saleItems.filter(item => {
-      const product = products.find(p => p.id === item.productId);
-      return !product || item.quantitySold > product.quantity;
-    });
-
-    if (invalidItems.length > 0) {
-      toast.error('Algunas cantidades exceden el stock disponible');
+    setErrors({});
+    const newErrors: Record<string, string> = {};
+    let hasErrors = false;
+    for (const item of saleItems) {
+      const saleData = {
+        productId: Number(item.productId),
+        artisanId: Number(selectedArtisan),
+        eventId: Number(selectedEvent),
+        quantitySold: item.quantitySold,
+      };
+      const result = CreateSaleSchema.safeParse(saleData);
+      if (!result.success) {
+        result.error.errors.forEach((err) => {
+          newErrors[`${item.productId}-${err.path[0]}`] = err.message;
+        });
+        hasErrors = true;
+      }
+    }
+    if (hasErrors) {
+      setErrors(newErrors);
+      toast.error('Por favor corrija los errores en el formulario');
       return;
     }
-
-    // Register all sales
-    saleItems.forEach(item => {
-      const product = products.find(p => p.id === item.productId);
-      if (product) {
-        const totalAmount = (product.price || 0) * item.quantitySold;
-        addSale({
-          productId: item.productId,
-          artisanId: selectedArtisan,
-          eventId: selectedEvent,
-          quantitySold: item.quantitySold,
-          totalAmount,
-          date: new Date().toISOString().split('T')[0]
-        });
+    try {
+      for (const item of saleItems) {
+        const product = products.find((p) => p.id.toString() === item.productId);
+        if (product) {
+          await createSale({
+            productId: Number(item.productId),
+            artisanId: Number(selectedArtisan),
+            eventId: Number(selectedEvent),
+            quantitySold: item.quantitySold,
+            totalAmount: (product.price || 0) * item.quantitySold,
+            date: new Date().toISOString().split('T')[0],
+          });
+        }
       }
-    });
-
-    toast.success(`${saleItems.length} ventas registradas exitosamente`);
-    setSaleItems([]);
+      toast.success(`${saleItems.length} ventas registradas exitosamente`);
+      setSaleItems([]);
+      fetchProducts();
+    } catch (err: any) {
+      toast.error(err.message || 'Error al registrar venta');
+    }
   };
 
   const getTotalAmount = () => {
     return saleItems.reduce((total, item) => {
-      const product = products.find(p => p.id === item.productId);
+      const product = products.find(p => p.id.toString() === item.productId);
       const price = product?.price || 0;
       return total + (price * item.quantitySold);
     }, 0);
   };
 
   const getArtisanName = (artisanId: string) => {
-    return artisans.find(a => a.id === artisanId)?.name || 'Desconocido';
+    return artisans.find(a => a.id.toString() === artisanId)?.name || 'Desconocido';
   };
 
   const getEventName = (eventId: string) => {
-    return events.find(e => e.id === eventId)?.name || 'Desconocido';
+    return events.find(e => e.id.toString() === eventId)?.name || 'Desconocido';
   };
 
   return (
@@ -157,8 +214,8 @@ export default function RegistrarVentaPage() {
                         <SelectValue placeholder="Seleccionar feria" />
                       </SelectTrigger>
                       <SelectContent>
-                        {events.map((event) => (
-                          <SelectItem key={event.id} value={event.id}>
+                        {events.map((event: Event) => (
+                          <SelectItem key={event.id} value={event.id.toString()}>
                             {event.name} - {event.location}
                           </SelectItem>
                         ))}
@@ -172,8 +229,8 @@ export default function RegistrarVentaPage() {
                         <SelectValue placeholder="Seleccionar artesana" />
                       </SelectTrigger>
                       <SelectContent>
-                        {artisans.map((artisan) => (
-                          <SelectItem key={artisan.id} value={artisan.id}>
+                        {artisans.map((artisan: Artisan) => (
+                          <SelectItem key={artisan.id} value={artisan.id.toString()}>
                             {artisan.name}
                           </SelectItem>
                         ))}
@@ -202,18 +259,16 @@ export default function RegistrarVentaPage() {
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      {availableProducts.map((product) => (
+                      {availableProducts.map((product: Product) => (
                         <div key={product.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border rounded-lg hover:bg-gray-50">
                           <div className="flex-1 mb-4 sm:mb-0">
                             <h4 className="font-medium text-gray-900">{product.name}</h4>
                             <div className="flex flex-wrap gap-2 mt-2">
                               <Badge variant="secondary">{product.category}</Badge>
-                              <Badge variant="outline">Stock: {product.quantity}</Badge>
-                              {product.price && (
-                                <Badge variant="outline">
-                                  ${product.price.toLocaleString()}
-                                </Badge>
-                              )}
+                              <Badge variant="outline">Stock: {product.availableQuantity}</Badge>
+                              <Badge variant="outline">
+                                ${product.price.toLocaleString()}
+                              </Badge>
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
@@ -224,12 +279,15 @@ export default function RegistrarVentaPage() {
                               id={`qty-${product.id}`}
                               type="number"
                               min="0"
-                              max={product.quantity}
-                              value={getQuantityForProduct(product.id)}
-                              onChange={(e) => handleQuantityChange(product.id, e.target.value)}
+                              max={product.availableQuantity}
+                              value={getQuantityForProduct(product.id.toString())}
+                              onChange={(e) => handleQuantityChange(product.id.toString(), e.target.value)}
                               placeholder="0"
-                              className="w-20 text-center"
+                              className={`w-20 text-center ${errors[`${product.id}-quantitySold`] ? 'border-red-500' : ''}`}
                             />
+                            {errors[`${product.id}-quantitySold`] && (
+                              <p className="text-red-500 text-sm mt-1">{errors[`${product.id}-quantitySold`]}</p>
+                            )}
                           </div>
                         </div>
                       ))}

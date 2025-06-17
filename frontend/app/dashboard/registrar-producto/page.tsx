@@ -14,11 +14,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { AppSidebar } from "@/app/dashboard/components/app-sidebar";
 import { SidebarProvider, SidebarInset } from "@/app/dashboard/components/sidebar";
 import { SiteHeader } from "@/app/dashboard/components/site-header";
-import type { Product } from '@/lib/store';
-import { getProducts, createProduct, updateProduct, deleteProduct, getEvents, getArtisans } from './api';
+import type { Product, Event, Artisan } from '@/lib/store';
+import { getProducts, createProduct, updateProduct, deleteProduct, getEvents, getArtisans } from '@/lib/api';
+import { CreateProductSchema } from '@/lib/schemas';
 
 export default function RegistrarProductoPage() {
-  const [products, setProducts] = useState([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [selectedEvent, setSelectedEvent] = useState('');
@@ -28,17 +29,18 @@ export default function RegistrarProductoPage() {
   
   const [formData, setFormData] = useState({
     name: '',
-    quantity: '',
+    availableQuantity: '',
     category: '',
     price: '',
     eventId: '',
     artisanId: ''
   });
 
-  const [events, setEvents] = useState([]);
-  const [artisans, setArtisans] = useState([]);
+  const [events, setEvents] = useState<Event[]>([]);
+  const [artisans, setArtisans] = useState<Artisan[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(false);
   const [loadingArtisans, setLoadingArtisans] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const categories = ['Textiles', 'Cerámica', 'Joyería', 'Tallado', 'Otros'];
 
@@ -87,18 +89,25 @@ export default function RegistrarProductoPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name || !formData.quantity || !formData.category || !formData.eventId || !formData.artisanId || !formData.price) {
-      toast.error('Por favor complete todos los campos obligatorios');
-      return;
-    }
+    setErrors({});
     const productData = {
       name: formData.name,
       price: Number(formData.price),
-      availableQuantity: Number(formData.quantity),
+      availableQuantity: Number(formData.availableQuantity),
       eventId: Number(formData.eventId),
       artisanId: Number(formData.artisanId),
       category: formData.category,
     };
+    const result = CreateProductSchema.safeParse(productData);
+    if (!result.success) {
+      const newErrors: Record<string, string> = {};
+      result.error.errors.forEach((err) => {
+        newErrors[err.path[0]] = err.message;
+      });
+      setErrors(newErrors);
+      toast.error('Por favor corrija los errores en el formulario');
+      return;
+    }
     try {
       if (editingProduct) {
         await updateProduct(editingProduct, productData);
@@ -117,7 +126,7 @@ export default function RegistrarProductoPage() {
   const resetForm = () => {
     setFormData({
       name: '',
-      quantity: '',
+      availableQuantity: '',
       category: '',
       price: '',
       eventId: '',
@@ -130,19 +139,19 @@ export default function RegistrarProductoPage() {
   const handleEdit = (product: Product) => {
     setFormData({
       name: product.name,
-      quantity: product.quantity.toString(),
-      category: product.category,
-      price: product.price?.toString() || '',
-      eventId: product.eventId,
-      artisanId: product.artisanId
+      availableQuantity: product.availableQuantity.toString(),
+      category: product.category || '',
+      price: product.price.toString(),
+      eventId: product.eventId.toString(),
+      artisanId: product.artisanId.toString()
     });
-    setEditingProduct(product.id);
+    setEditingProduct(product.id.toString());
     setIsDialogOpen(true);
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (id: number) => {
     try {
-      await deleteProduct(id);
+      await deleteProduct(id.toString());
       toast.success('Producto eliminado exitosamente');
       fetchProducts();
     } catch (err: any) {
@@ -151,17 +160,17 @@ export default function RegistrarProductoPage() {
   };
 
   const filteredProducts = products.filter(product => {
-    if (selectedEvent && product.eventId !== selectedEvent) return false;
-    if (selectedArtisan && product.artisanId !== selectedArtisan) return false;
+    if (selectedEvent && product.eventId.toString() !== selectedEvent) return false;
+    if (selectedArtisan && product.artisanId.toString() !== selectedArtisan) return false;
     return true;
   });
 
   const getArtisanName = (artisanId: string) => {
-    return artisans.find(a => a.id === artisanId)?.name || 'Desconocido';
+    return artisans.find(a => a.id.toString() === artisanId)?.name || 'Desconocido';
   };
 
   const getEventName = (eventId: string) => {
-    return events.find(e => e.id === eventId)?.name || 'Desconocido';
+    return events.find(e => e.id.toString() === eventId)?.name || 'Desconocido';
   };
 
   const handleEventFilterChange = (value: string) => {
@@ -211,8 +220,9 @@ export default function RegistrarProductoPage() {
                         value={formData.name}
                         onChange={(e) => setFormData({...formData, name: e.target.value})}
                         placeholder="Ej: Bolso tejido a mano"
-                        className="text-base bg-background text-foreground border-border focus:border-primary"
+                        className={`text-base bg-background text-foreground border-border focus:border-primary ${errors.name ? 'border-red-500' : ''}`}
                       />
+                      {errors.name && <p className="text-red-500 text-sm mt-1">{errors.name}</p>}
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
@@ -221,11 +231,12 @@ export default function RegistrarProductoPage() {
                           id="quantity"
                           type="number"
                           min="1"
-                          value={formData.quantity}
-                          onChange={(e) => setFormData({...formData, quantity: e.target.value})}
+                          value={formData.availableQuantity}
+                          onChange={(e) => setFormData({...formData, availableQuantity: e.target.value})}
                           placeholder="0"
-                          className="text-base bg-background text-foreground border-border focus:border-primary"
+                          className={`text-base bg-background text-foreground border-border focus:border-primary ${errors.availableQuantity ? 'border-red-500' : ''}`}
                         />
+                        {errors.availableQuantity && <p className="text-red-500 text-sm mt-1">{errors.availableQuantity}</p>}
                       </div>
                       <div>
                         <Label htmlFor="price" className="mb-2 block">Precio (opcional)</Label>
@@ -237,14 +248,15 @@ export default function RegistrarProductoPage() {
                           value={formData.price}
                           onChange={(e) => setFormData({...formData, price: e.target.value})}
                           placeholder="0"
-                          className="text-base bg-background text-foreground border-border focus:border-primary"
+                          className={`text-base bg-background text-foreground border-border focus:border-primary ${errors.price ? 'border-red-500' : ''}`}
                         />
+                        {errors.price && <p className="text-red-500 text-sm mt-1">{errors.price}</p>}
                       </div>
                     </div>
                     <div>
                       <Label htmlFor="category" className="mb-2 block">Categoría *</Label>
                       <Select value={formData.category} onValueChange={(value) => setFormData({...formData, category: value})}>
-                        <SelectTrigger className="text-base bg-background text-foreground border-border focus:border-primary">
+                        <SelectTrigger className={`text-base bg-background text-foreground border-border focus:border-primary ${errors.category ? 'border-red-500' : ''}`}>
                           <SelectValue placeholder="Seleccionar categoría" />
                         </SelectTrigger>
                         <SelectContent>
@@ -255,36 +267,39 @@ export default function RegistrarProductoPage() {
                           ))}
                         </SelectContent>
                       </Select>
+                      {errors.category && <p className="text-red-500 text-sm mt-1">{errors.category}</p>}
                     </div>
                     <div>
                       <Label htmlFor="event" className="mb-2 block">Feria *</Label>
                       <Select value={formData.eventId} onValueChange={(value) => setFormData({...formData, eventId: value})}>
-                        <SelectTrigger className="text-base bg-background text-foreground border-border focus:border-primary">
+                        <SelectTrigger className={`text-base bg-background text-foreground border-border focus:border-primary ${errors.eventId ? 'border-red-500' : ''}`}>
                           <SelectValue placeholder="Seleccionar feria" />
                         </SelectTrigger>
                         <SelectContent>
                           {events.map((event) => (
-                            <SelectItem key={event.id} value={event.id}>
+                            <SelectItem key={event.id} value={event.id.toString()}>
                               {event.name}
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
+                      {errors.eventId && <p className="text-red-500 text-sm mt-1">{errors.eventId}</p>}
                     </div>
                     <div>
                       <Label htmlFor="artisan" className="mb-2 block">Artesana *</Label>
                       <Select value={formData.artisanId} onValueChange={(value) => setFormData({...formData, artisanId: value})}>
-                        <SelectTrigger className="text-base bg-background text-foreground border-border focus:border-primary">
+                        <SelectTrigger className={`text-base bg-background text-foreground border-border focus:border-primary ${errors.artisanId ? 'border-red-500' : ''}`}>
                           <SelectValue placeholder="Seleccionar artesana" />
                         </SelectTrigger>
                         <SelectContent>
                           {artisans.map((artisan) => (
-                            <SelectItem key={artisan.id} value={artisan.id}>
+                            <SelectItem key={artisan.id} value={artisan.id.toString()}>
                               {artisan.name}
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
+                      {errors.artisanId && <p className="text-red-500 text-sm mt-1">{errors.artisanId}</p>}
                     </div>
                     <div className="flex gap-2 pt-4">
                       <Button type="submit" className="flex-1 bg-orange-500 hover:bg-orange-600 text-white">
@@ -314,7 +329,7 @@ export default function RegistrarProductoPage() {
                       <SelectContent>
                         <SelectItem value="all">Todas las ferias</SelectItem>
                         {events.map((event) => (
-                          <SelectItem key={event.id} value={event.id}>
+                          <SelectItem key={event.id} value={event.id.toString()}>
                             {event.name}
                           </SelectItem>
                         ))}
@@ -330,7 +345,7 @@ export default function RegistrarProductoPage() {
                       <SelectContent>
                         <SelectItem value="all">Todas las artesanas</SelectItem>
                         {artisans.map((artisan) => (
-                          <SelectItem key={artisan.id} value={artisan.id}>
+                          <SelectItem key={artisan.id} value={artisan.id.toString()}>
                             {artisan.name}
                           </SelectItem>
                         ))}
@@ -352,7 +367,7 @@ export default function RegistrarProductoPage() {
                   </CardContent>
                 </Card>
               ) : (
-                filteredProducts.map((product) => (
+                filteredProducts.map((product: Product) => (
                   <Card key={product.id} className="hover:shadow-md transition-shadow">
                     <CardContent className="p-6 bg-background">
                       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -365,17 +380,15 @@ export default function RegistrarProductoPage() {
                               {product.category}
                             </Badge>
                             <Badge variant="outline" className="text-primary bg-primary/10">
-                              Cantidad: {product.quantity}
+                              Cantidad: {product.availableQuantity}
                             </Badge>
-                            {product.price && (
-                              <Badge variant="outline" className="text-primary bg-primary/10">
-                                ${product.price.toLocaleString()}
-                              </Badge>
-                            )}
+                            <Badge variant="outline" className="text-primary bg-primary/10">
+                              ${product.price.toLocaleString()}
+                            </Badge>
                           </div>
                           <div className="text-sm text-muted-foreground">
-                            <p>Feria: {getEventName(product.eventId)}</p>
-                            <p>Artesana: {getArtisanName(product.artisanId)}</p>
+                            <p>Feria: {getEventName(product.eventId.toString())}</p>
+                            <p>Artesana: {getArtisanName(product.artisanId.toString())}</p>
                           </div>
                         </div>
                         <div className="flex gap-2">

@@ -46,4 +46,14 @@ export async function getArtisans() {
   const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/artisans`);
   if (!res.ok) throw new Error('Error al obtener artesanas');
   return res.json();
+}
+
+export async function createSale(data) {
+  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/sales`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error('Error al registrar venta');
+  return res.json();
 } 
