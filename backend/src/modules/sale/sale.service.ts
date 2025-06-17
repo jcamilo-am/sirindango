@@ -35,6 +35,9 @@ export class SaleService {
           ...data,
           date: new Date(),
         },
+        include: {
+          product: true,
+        },
       });
 
       // Actualiza la cantidad disponible del producto
@@ -47,7 +50,11 @@ export class SaleService {
         },
       });
 
-      return sale;
+      // Retorna la venta con totalAmount calculado
+      return {
+        ...sale,
+        totalAmount: sale.product.price * sale.quantitySold,
+      };
     });
   }
 
@@ -60,16 +67,39 @@ export class SaleService {
     let orderBy: any = undefined;
     if (order === 'date') orderBy = { date: 'asc' };
     if (order === 'quantity') orderBy = { quantitySold: 'asc' };
-    return this.prisma.sale.findMany({
+    
+    const sales = await this.prisma.sale.findMany({
       where,
       orderBy,
+      include: {
+        product: true, // Incluir el producto para calcular totalAmount
+      },
     });
+
+    // Retornar las ventas con totalAmount calculado
+    return sales.map(sale => ({
+      ...sale,
+      totalAmount: sale.product.price * sale.quantitySold,
+      // Remover el objeto product anidado para mantener la estructura plana
+      product: undefined,
+    }));
   }
 
   // Busca una venta por ID
   async findOne(id: number) {
-    const sale = await this.prisma.sale.findUnique({ where: { id } });
+    const sale = await this.prisma.sale.findUnique({ 
+      where: { id },
+      include: {
+        product: true,
+      },
+    });
     if (!sale) throw new NotFoundException('La venta no existe');
-    return sale;
+    
+    // Retornar la venta con totalAmount calculado
+    return {
+      ...sale,
+      totalAmount: sale.product.price * sale.quantitySold,
+      product: undefined,
+    };
   }
 }
