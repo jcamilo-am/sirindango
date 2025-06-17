@@ -6,7 +6,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { useStore } from '@/lib/store';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { ShoppingCart, CheckCircle } from 'lucide-react';
@@ -14,9 +13,12 @@ import { Separator } from '@/components/ui/separator';
 import { AppSidebar } from "@/app/dashboard/components/app-sidebar";
 import { SidebarProvider, SidebarInset } from "@/app/dashboard/components/sidebar";
 import { SiteHeader } from "@/app/dashboard/components/site-header";
-import { getProducts, getEvents, getArtisans, createSale } from '@/lib/api';
-import { CreateSaleSchema } from '@/lib/schemas';
-import type { Product, Event, Artisan } from '@/lib/store';
+import { useSales } from './hooks/useSales';
+import { useProducts } from '../products/hooks/useProducts';
+import { useArtisans } from '../artisans/hooks/useArtisans';
+import { useEvents } from '../events/hooks/useEvents';
+import { CreateSaleSchema } from './models/sale';
+import type { Product, Artisan } from '@/lib/store';
 
 interface SaleItem {
   productId: string;
@@ -24,17 +26,23 @@ interface SaleItem {
 }
 
 export default function RegistrarVentaPage() {
-  // Estados locales para los datos
-  const [products, setProducts] = useState<Product[]>([]);
-  const [events, setEvents] = useState<Event[]>([]);
-  const [artisans, setArtisans] = useState<Artisan[]>([]);
+  // Hooks centralizados
+  const { products, fetchProducts } = useProducts();
+  const { events, fetchEvents } = useEvents();
+  const { artisans, fetchArtisans } = useArtisans();
+  const { createSale } = useSales();
+
   const [selectedEvent, setSelectedEvent] = useState('');
   const [selectedArtisan, setSelectedArtisan] = useState('');
   const [saleItems, setSaleItems] = useState<SaleItem[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [loadingEvents, setLoadingEvents] = useState(false);
-  const [loadingArtisans, setLoadingArtisans] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    fetchProducts();
+    fetchEvents();
+    fetchArtisans();
+    // eslint-disable-next-line
+  }, []);
 
   const availableProducts = products.filter(product => {
     if (selectedEvent && product.eventId.toString() !== selectedEvent) return false;
@@ -44,15 +52,14 @@ export default function RegistrarVentaPage() {
 
   const handleQuantityChange = (productId: string, quantity: string) => {
     const quantityNum = parseInt(quantity) || 0;
-    
     setSaleItems(prev => {
       const existing = prev.find(item => item.productId === productId);
       if (existing) {
         if (quantityNum === 0) {
           return prev.filter(item => item.productId !== productId);
         }
-        return prev.map(item => 
-          item.productId === productId 
+        return prev.map(item =>
+          item.productId === productId
             ? { ...item, quantitySold: quantityNum }
             : item
         );
@@ -67,48 +74,6 @@ export default function RegistrarVentaPage() {
     const item = saleItems.find(item => item.productId === productId);
     return item ? item.quantitySold.toString() : '';
   };
-
-  const fetchProducts = async () => {
-    setLoading(true);
-    try {
-      const data: Product[] = await getProducts();
-      setProducts(data);
-    } catch (err) {
-      toast.error('Error al cargar productos');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchEvents = async () => {
-    setLoadingEvents(true);
-    try {
-      const data: Event[] = await getEvents();
-      setEvents(data);
-    } catch (err) {
-      toast.error('Error al cargar eventos');
-    } finally {
-      setLoadingEvents(false);
-    }
-  };
-
-  const fetchArtisans = async () => {
-    setLoadingArtisans(true);
-    try {
-      const data: Artisan[] = await getArtisans();
-      setArtisans(data);
-    } catch (err) {
-      toast.error('Error al cargar artesanas');
-    } finally {
-      setLoadingArtisans(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchProducts();
-    fetchEvents();
-    fetchArtisans();
-  }, []);
 
   const handleRegisterSales = async () => {
     if (!selectedEvent || !selectedArtisan) {
@@ -128,6 +93,11 @@ export default function RegistrarVentaPage() {
         artisanId: Number(selectedArtisan),
         eventId: Number(selectedEvent),
         quantitySold: item.quantitySold,
+        totalAmount: (() => {
+          const product = products.find((p) => p.id.toString() === item.productId);
+          return (product?.price || 0) * item.quantitySold;
+        })(),
+        date: new Date().toISOString().split('T')[0],
       };
       const result = CreateSaleSchema.safeParse(saleData);
       if (!result.success) {
@@ -159,8 +129,8 @@ export default function RegistrarVentaPage() {
       toast.success(`${saleItems.length} ventas registradas exitosamente`);
       setSaleItems([]);
       fetchProducts();
-    } catch (err: any) {
-      toast.error(err.message || 'Error al registrar venta');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Error al registrar venta');
     }
   };
 
@@ -214,7 +184,7 @@ export default function RegistrarVentaPage() {
                         <SelectValue placeholder="Seleccionar feria" />
                       </SelectTrigger>
                       <SelectContent>
-                        {events.map((event: Event) => (
+                        {events.map((event) => (
                           <SelectItem key={event.id} value={event.id.toString()}>
                             {event.name} - {event.location}
                           </SelectItem>

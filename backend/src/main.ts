@@ -6,7 +6,16 @@ import { GlobalExceptionFilter } from './common/filters/global-exception.filter'
 import { setupSwagger } from './config/swagger.config';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {cors: true});
+  const app = await NestFactory.create(AppModule, { cors: true });
+
+  // Configurar CORS detallado
+  app.enableCors({
+    origin: '*', // Permite todas las origenes
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    allowedHeaders: 'Content-Type, Accept, Authorization',
+    credentials: true,
+  });
+
   app.useGlobalFilters(new GlobalExceptionFilter());
   setupSwagger(app);
 

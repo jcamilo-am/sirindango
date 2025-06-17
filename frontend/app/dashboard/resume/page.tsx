@@ -1,115 +1,61 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { useStore } from '@/lib/store';
-import { BarChart3, TrendingUp, Users, Package } from 'lucide-react';
 import { AppSidebar } from "@/app/dashboard/components/app-sidebar"
 import { SidebarProvider, SidebarInset } from "@/app/dashboard/components/sidebar"
 import { SiteHeader } from "@/app/dashboard/components/site-header"
-import { toast, ToastContainer } from 'react-toastify';
+import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
-interface Sale {
-  id: string;
-  artisanId: string;
-  productId: string;
-  quantitySold: number;
-  totalAmount: number;
-}
-
-interface Event {
-  id: string;
-  name: string;
-  location: string;
-  date: string;
-}
-
-interface Artisan {
-  id: string;
-  name: string;
-}
-
-interface Product {
-  id: string;
-  name: string;
-}
-
-interface ArtisanSalesData {
-  artisanId: string;
-  totalRevenue: number;
-  totalProducts: number;
-  sales: Sale[];
-}
+import { useEvents } from '../events/hooks/useEvents';
+import { useSales } from '../sales/hooks/useSales';
+import { useProducts } from '../products/hooks/useProducts';
+import { useArtisans } from '../artisans/hooks/useArtisans';
 
 export default function ResumePage() {
-  const { 
-    products, 
-    events, 
-    artisans, 
-    sales,
-    getSalesByEvent
-  } = useStore();
-  
-  const [selectedEvent, setSelectedEvent] = useState('');
+  const { events, fetchEvents } = useEvents();
+  const { sales, fetchSales } = useSales();
+  const { products, fetchProducts } = useProducts();
+  const { artisans, fetchArtisans } = useArtisans();
 
-  const getArtisanName = (artisanId: string) => {
-    return artisans.find((a: Artisan) => a.id === artisanId)?.name || 'Desconocido';
-  };
+  const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
 
-  const getProductName = (productId: string) => {
-    return products.find((p: Product) => p.id === productId)?.name || 'Desconocido';
-  };
+  useEffect(() => {
+    fetchEvents();
+    fetchSales();
+    fetchProducts();
+    fetchArtisans();
+    // eslint-disable-next-line
+  }, []);
 
-  const getEventSummary = (eventId: string) => {
-    const eventSales = getSalesByEvent(eventId);
-    const totalRevenue = eventSales.reduce((sum: number, sale: Sale) => sum + sale.totalAmount, 0);
-    const totalProducts = eventSales.reduce((sum: number, sale: Sale) => sum + sale.quantitySold, 0);
-    const uniqueArtisans = new Set(eventSales.map((sale: Sale) => sale.artisanId)).size;
-    
+  // Filtra ventas, productos y artesanas por evento seleccionado
+  const eventSales = selectedEventId ? sales.filter(s => s.eventId === selectedEventId) : [];
+  const eventProducts = selectedEventId ? products.filter(p => p.eventId === selectedEventId) : [];
+  const eventArtisans = selectedEventId
+    ? artisans.filter(a => eventProducts.some(p => p.artisanId === a.id))
+    : [];
+
+  // Calcula estadísticas
+  const totalRevenue = eventSales.reduce((sum, s) => sum + s.totalAmount, 0);
+  const totalProducts = eventSales.reduce((sum, s) => sum + s.quantitySold, 0);
+  const uniqueArtisans = new Set(eventSales.map(s => s.artisanId)).size;
+  const salesCount = eventSales.length;
+
+  // Agrupa ventas por artesana
+  const artisanSales = eventArtisans.map(artisan => {
+    const salesByArtisan = eventSales.filter(s => s.artisanId === artisan.id);
     return {
-      totalRevenue,
-      totalProducts,
-      uniqueArtisans,
-      salesCount: eventSales.length
+      artisan,
+      totalRevenue: salesByArtisan.reduce((sum, s) => sum + s.totalAmount, 0),
+      totalProducts: salesByArtisan.reduce((sum, s) => sum + s.quantitySold, 0),
+      sales: salesByArtisan,
     };
-  };
+  });
 
-  const getArtisanSalesByEvent = (eventId: string) => {
-    const eventSales = getSalesByEvent(eventId);
-    const artisanSales = new Map();
-    
-    eventSales.forEach((sale: Sale) => {
-      const artisanId = sale.artisanId;
-      if (!artisanSales.has(artisanId)) {
-        artisanSales.set(artisanId, {
-          artisanId,
-          totalRevenue: 0,
-          totalProducts: 0,
-          sales: []
-        });
-      }
-      
-      const artisanData = artisanSales.get(artisanId);
-      artisanData.totalRevenue += sale.totalAmount;
-      artisanData.totalProducts += sale.quantitySold;
-      artisanData.sales.push(sale);
-    });
-    
-    return Array.from(artisanSales.values()).sort((a, b) => b.totalRevenue - a.totalRevenue);
-  };
-
-  const selectedEventData = selectedEvent ? events.find((e: Event) => e.id === selectedEvent) : null;
-  const eventSummary = selectedEvent ? getEventSummary(selectedEvent) : null;
-  const artisanSales = selectedEvent ? getArtisanSalesByEvent(selectedEvent) : [];
-
-  // Overall statistics
-  const totalRevenue = sales.reduce((sum: number, sale: Sale) => sum + sale.totalAmount, 0);
-  const totalProducts = products.length;
-  const totalArtisans = artisans.length;
-  const totalEvents = events.length;
+  const selectedEvent = events.find(e => e.id === selectedEventId);
 
   return (
     <SidebarProvider
@@ -129,55 +75,6 @@ export default function ResumePage() {
                 <h2 className="text-2xl font-bold text-white">Resumen de Ventas</h2>
                 <p className="text-white">Análisis de ventas por evento y artesana</p>
               </div>
-              {/* Overall Statistics */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <Card>
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-gray-600">Ingresos Totales</p>
-                        <p className="text-2xl font-bold text-green-600">
-                          ${totalRevenue.toLocaleString()}
-                        </p>
-                      </div>
-                      <TrendingUp className="h-8 w-8 text-green-600" />
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-gray-600">Productos</p>
-                        <p className="text-2xl font-bold text-blue-600">{totalProducts}</p>
-                      </div>
-                      <Package className="h-8 w-8 text-blue-600" />
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-gray-600">Artesanas</p>
-                        <p className="text-2xl font-bold text-purple-600">{totalArtisans}</p>
-                      </div>
-                      <Users className="h-8 w-8 text-purple-600" />
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-gray-600">Ferias</p>
-                        <p className="text-2xl font-bold text-orange-600">{totalEvents}</p>
-                      </div>
-                      <BarChart3 className="h-8 w-8 text-orange-600" />
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
               {/* Event Selection */}
               <Card>
                 <CardHeader>
@@ -187,122 +84,104 @@ export default function ResumePage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <Select value={selectedEvent} onValueChange={setSelectedEvent}>
+                  <Select
+                    value={selectedEventId !== null ? selectedEventId.toString() : ''}
+                    onValueChange={v => setSelectedEventId(Number(v))}
+                  >
                     <SelectTrigger className="text-base">
                       <SelectValue placeholder="Seleccionar evento" />
                     </SelectTrigger>
                     <SelectContent>
-                      {events.map((event: Event) => (
-                        <SelectItem key={event.id} value={event.id}>
-                          {event.name} - {event.location} ({event.date})
+                      {events.map(event => (
+                        <SelectItem key={event.id} value={event.id.toString()}>
+                          {event.name} - {event.location}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </CardContent>
               </Card>
+              {/* Mensaje si no hay eventos */}
+              {events.length === 0 && (
+                <div className="text-center text-gray-400 py-8">
+                  No hay eventos ni ventas registradas.
+                </div>
+              )}
               {/* Event Summary */}
-              {selectedEventData && eventSummary && (
-                <>
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-lg">
-                        Resumen: {selectedEventData.name}
-                      </CardTitle>
-                      <CardDescription>
-                        {selectedEventData.location} - {selectedEventData.date}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <div className="text-center p-4 bg-green-50 rounded-lg">
-                          <p className="text-sm text-gray-600">Ingresos Totales</p>
-                          <p className="text-xl font-bold text-green-600">
-                            ${eventSummary.totalRevenue.toLocaleString()}
-                          </p>
-                        </div>
-                        <div className="text-center p-4 bg-blue-50 rounded-lg">
-                          <p className="text-sm text-gray-600">Productos Vendidos</p>
-                          <p className="text-xl font-bold text-blue-600">
-                            {eventSummary.totalProducts}
-                          </p>
-                        </div>
-                        <div className="text-center p-4 bg-purple-50 rounded-lg">
-                          <p className="text-sm text-gray-600">Artesanas Participantes</p>
-                          <p className="text-xl font-bold text-purple-600">
-                            {eventSummary.uniqueArtisans}
-                          </p>
-                        </div>
-                        <div className="text-center p-4 bg-orange-50 rounded-lg">
-                          <p className="text-sm text-gray-600">Transacciones</p>
-                          <p className="text-xl font-bold text-orange-600">
-                            {eventSummary.salesCount}
-                          </p>
+              {selectedEvent && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">
+                      Resumen: {selectedEvent.name}
+                    </CardTitle>
+                    <CardDescription>
+                      {selectedEvent.location} - {new Date(selectedEvent.startDate).toLocaleDateString()}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                      <div className="text-center p-4 bg-green-50 rounded-lg">
+                        <p className="text-sm text-gray-600">Ingresos Totales</p>
+                        <p className="text-xl font-bold text-green-600">
+                          ${totalRevenue.toLocaleString()}
+                        </p>
+                      </div>
+                      <div className="text-center p-4 bg-blue-50 rounded-lg">
+                        <p className="text-sm text-gray-600">Productos Vendidos</p>
+                        <p className="text-xl font-bold text-blue-600">
+                          {totalProducts}
+                        </p>
+                      </div>
+                      <div className="text-center p-4 bg-purple-50 rounded-lg">
+                        <p className="text-sm text-gray-600">Artesanas Participantes</p>
+                        <p className="text-xl font-bold text-purple-600">
+                          {uniqueArtisans}
+                        </p>
+                      </div>
+                      <div className="text-center p-4 bg-orange-50 rounded-lg">
+                        <p className="text-sm text-gray-600">Transacciones</p>
+                        <p className="text-xl font-bold text-orange-600">
+                          {salesCount}
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+              {/* Artisan Sales Details */}
+              {selectedEvent && artisanSales.length > 0 &&
+                artisanSales.map((artisanData, index) => (
+                  <Card key={artisanData.artisan.id} className="border-l-4 border-l-orange-500">
+                    <CardContent className="p-6">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <h4 className="font-semibold text-lg text-gray-900">
+                              {artisanData.artisan.name}
+                            </h4>
+                            <Badge variant="secondary">#{index + 1}</Badge>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4 mb-3">
+                            <div>
+                              <p className="text-sm text-gray-600">Ingresos</p>
+                              <p className="font-semibold text-green-600">
+                                ${artisanData.totalRevenue.toLocaleString()}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">Productos Vendidos</p>
+                              <p className="font-semibold text-blue-600">
+                                {artisanData.totalProducts}
+                              </p>
+                            </div>
+                          </div>
+                          {/* Puedes mostrar el detalle de ventas aquí si lo deseas */}
                         </div>
                       </div>
                     </CardContent>
                   </Card>
-                  {/* Artisan Sales Details */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-lg">Ventas por Artesana</CardTitle>
-                      <CardDescription>
-                        Desglose de ventas para cada artesana en el evento seleccionado
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      {artisanSales.length === 0 ? (
-                        <div className="text-center py-8">
-                          <BarChart3 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                          <p className="text-gray-500">No hay ventas registradas para este evento</p>
-                        </div>
-                      ) : (
-                        <div className="space-y-4">
-                          {artisanSales.map((artisanData: ArtisanSalesData, index: number) => (
-                            <Card key={artisanData.artisanId} className="border-l-4 border-l-orange-500">
-                              <CardContent className="p-6">
-                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                                  <div className="flex-1">
-                                    <div className="flex items-center gap-3 mb-2">
-                                      <h4 className="font-semibold text-lg text-gray-900">
-                                        {getArtisanName(artisanData.artisanId)}
-                                      </h4>
-                                      <Badge variant="secondary">#{index + 1}</Badge>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4 mb-3">
-                                      <div>
-                                        <p className="text-sm text-gray-600">Ingresos</p>
-                                        <p className="font-semibold text-green-600">
-                                          ${artisanData.totalRevenue.toLocaleString()}
-                                        </p>
-                                      </div>
-                                      <div>
-                                        <p className="text-sm text-gray-600">Productos Vendidos</p>
-                                        <p className="font-semibold text-blue-600">
-                                          {artisanData.totalProducts}
-                                        </p>
-                                      </div>
-                                    </div>
-                                    <div className="space-y-1">
-                                      <p className="text-sm font-medium text-gray-700">Productos:</p>
-                                      {artisanData.sales.map((sale: Sale, saleIndex: number) => (
-                                        <div key={saleIndex} className="text-sm text-gray-600 ml-2">
-                                          • {getProductName(sale.productId)} - {sale.quantitySold} unidades
-                                          (${sale.totalAmount.toLocaleString()})
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                </div>
-                              </CardContent>
-                            </Card>
-                          ))}
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                </>
-              )}
+                ))
+              }
             </div>
           </div>
         </div>

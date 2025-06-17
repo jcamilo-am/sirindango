@@ -23,17 +23,22 @@ const data = {
   navMain: [
     {
       title: "Eventos",
-      url: "/dashboard/eventos",
+      url: "/dashboard/events",
       icon: IconChartBar,
     },
     {
       title: "Registrar productos",
-      url: "/dashboard/registrar-producto",
+      url: "/dashboard/products",
       icon: IconPackage,
     },
     {
+      title: "Artesanas",
+      url: "/dashboard/artisans",
+      icon: IconUsers,
+    },
+    {
       title: "Registrar ventas",
-      url: "/dashboard/registrar-venta",
+      url: "/dashboard/sales",
       icon: IconShoppingCart,
     },
     {

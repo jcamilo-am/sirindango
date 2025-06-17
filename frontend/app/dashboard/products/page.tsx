@@ -15,18 +15,23 @@ import { AppSidebar } from "@/app/dashboard/components/app-sidebar";
 import { SidebarProvider, SidebarInset } from "@/app/dashboard/components/sidebar";
 import { SiteHeader } from "@/app/dashboard/components/site-header";
 import type { Product, Event, Artisan } from '@/lib/store';
-import { getProducts, createProduct, updateProduct, deleteProduct, getEvents, getArtisans } from '@/lib/api';
-import { CreateProductSchema } from '@/lib/schemas';
+import { useProducts } from './hooks/useProducts';
+import { CreateProductSchema } from './models/product';
 
 export default function RegistrarProductoPage() {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const {
+    products,
+    setProducts,
+    fetchProducts,
+    createProduct,
+    editProduct,
+    deleteProduct,
+  } = useProducts();
+
   const [selectedEvent, setSelectedEvent] = useState('');
   const [selectedArtisan, setSelectedArtisan] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<string | null>(null);
-  
   const [formData, setFormData] = useState({
     name: '',
     availableQuantity: '',
@@ -35,57 +40,38 @@ export default function RegistrarProductoPage() {
     eventId: '',
     artisanId: ''
   });
-
   const [events, setEvents] = useState<Event[]>([]);
   const [artisans, setArtisans] = useState<Artisan[]>([]);
-  const [loadingEvents, setLoadingEvents] = useState(false);
-  const [loadingArtisans, setLoadingArtisans] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-
   const categories = ['Textiles', 'Cerámica', 'Joyería', 'Tallado', 'Otros'];
 
-  const fetchProducts = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const data = await getProducts();
-      setProducts(data);
-    } catch (err) {
-      setError('Error al cargar productos');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchEvents = async () => {
-    setLoadingEvents(true);
-    try {
-      const data = await getEvents();
-      setEvents(data);
-    } catch (err) {
-      toast.error('Error al cargar eventos');
-    } finally {
-      setLoadingEvents(false);
-    }
-  };
-
-  const fetchArtisans = async () => {
-    setLoadingArtisans(true);
-    try {
-      const data = await getArtisans();
-      setArtisans(data);
-    } catch (err) {
-      toast.error('Error al cargar artesanas');
-    } finally {
-      setLoadingArtisans(false);
-    }
-  };
-
+  // Solo fetch de productos con el hook, eventos y artesanas con fetch propio
   useEffect(() => {
     fetchProducts();
     fetchEvents();
     fetchArtisans();
+    // eslint-disable-next-line
   }, []);
+
+  // Fetch de eventos y artesanas (puedes reemplazar por tu API real)
+  const fetchEvents = async () => {
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/events`);
+      const data = await res.json();
+      setEvents(data);
+    } catch {
+      toast.error('Error al cargar eventos');
+    }
+  };
+  const fetchArtisans = async () => {
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/artisans`);
+      const data = await res.json();
+      setArtisans(data);
+    } catch {
+      toast.error('Error al cargar artesanas');
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -102,7 +88,7 @@ export default function RegistrarProductoPage() {
     if (!result.success) {
       const newErrors: Record<string, string> = {};
       result.error.errors.forEach((err) => {
-        newErrors[err.path[0]] = err.message;
+        newErrors[err.path[0] as string] = err.message;
       });
       setErrors(newErrors);
       toast.error('Por favor corrija los errores en el formulario');
@@ -110,16 +96,22 @@ export default function RegistrarProductoPage() {
     }
     try {
       if (editingProduct) {
-        await updateProduct(editingProduct, productData);
-        toast.success('Producto actualizado exitosamente');
+        const updated = await editProduct(Number(editingProduct), productData);
+        if (updated) {
+          setProducts(products.map(p => p.id === updated.id ? updated : p));
+          toast.success('Producto actualizado exitosamente');
+        }
       } else {
-        await createProduct(productData);
-        toast.success('Producto registrado exitosamente');
+        const created = await createProduct(productData);
+        if (created) {
+          setProducts([...products, created]);
+          toast.success('Producto registrado exitosamente');
+        }
       }
-      fetchProducts();
       resetForm();
-    } catch (err: any) {
-      toast.error(err.message || 'Error al guardar producto');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Error al guardar producto';
+      toast.error(message);
     }
   };
 
@@ -151,11 +143,14 @@ export default function RegistrarProductoPage() {
 
   const handleDelete = async (id: number) => {
     try {
-      await deleteProduct(id.toString());
-      toast.success('Producto eliminado exitosamente');
-      fetchProducts();
-    } catch (err: any) {
-      toast.error(err.message || 'Error al eliminar producto');
+      const ok = await deleteProduct(id);
+      if (ok) {
+        setProducts(products.filter(p => p.id !== id));
+        toast.success('Producto eliminado exitosamente');
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Error al eliminar producto';
+      toast.error(message);
     }
   };
 
@@ -168,15 +163,12 @@ export default function RegistrarProductoPage() {
   const getArtisanName = (artisanId: string) => {
     return artisans.find(a => a.id.toString() === artisanId)?.name || 'Desconocido';
   };
-
   const getEventName = (eventId: string) => {
     return events.find(e => e.id.toString() === eventId)?.name || 'Desconocido';
   };
-
   const handleEventFilterChange = (value: string) => {
     setSelectedEvent(value === 'all' ? '' : value);
   };
-
   const handleArtisanFilterChange = (value: string) => {
     setSelectedArtisan(value === 'all' ? '' : value);
   };
