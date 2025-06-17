@@ -1,11 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useStore } from '@/lib/store';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { Plus, Edit2, Trash2, Calendar } from 'lucide-react';
@@ -13,44 +12,90 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { AppSidebar } from "@/app/dashboard/components/app-sidebar";
 import { SidebarProvider, SidebarInset } from "@/app/dashboard/components/sidebar";
 import { SiteHeader } from "@/app/dashboard/components/site-header";
+import { useEvents } from './hooks/useEvents';
 
 interface EventForm {
   name: string;
   location: string;
-  date: string;
+  startDate: string;
+  endDate: string;
 }
 
-export default function EventosPage() {
-  const { events } = useStore();
-  // Para demo, solo lectura. Si quieres agregar lógica de agregar/editar, deberás extender el store.
+export default function EventsPage() {
+  const {
+    events,
+    loading,
+    setEvents,
+    createEvent,
+    editEvent,
+    deleteEvent,
+  } = useEvents();
+
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingEvent, setEditingEvent] = useState<string | null>(null);
+  const [editingEvent, setEditingEvent] = useState<number | null>(null);
   const [formData, setFormData] = useState<EventForm>({
     name: '',
     location: '',
-    date: ''
+    startDate: '',
+    endDate: ''
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Handler para crear o editar evento
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast.success('Funcionalidad de agregar/editar evento solo demo.');
-    setIsDialogOpen(false);
-    setEditingEvent(null);
-    setFormData({ name: '', location: '', date: '' });
+    const data = {
+      name: formData.name,
+      location: formData.location,
+      startDate: new Date(formData.startDate).toISOString(),
+      endDate: new Date(formData.endDate).toISOString()
+    };
+    try {
+      if (editingEvent) {
+        const updated = await editEvent(editingEvent, data);
+        if (updated) {
+          setEvents(events.map(ev => ev.id === updated.id ? updated : ev));
+          toast.success('Evento actualizado exitosamente');
+        }
+      } else {
+        const created = await createEvent(data);
+        if (created) {
+          setEvents([...events, created]);
+          toast.success('Evento registrado exitosamente');
+        }
+      }
+      setIsDialogOpen(false);
+      setEditingEvent(null);
+      setFormData({ name: '', location: '', startDate: '', endDate: '' });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Error al registrar evento';
+      toast.error(message);
+    }
   };
 
-  const handleEdit = (event: any) => {
+  // Handler para editar
+  const handleEdit = (eventData: typeof events[number]) => {
     setFormData({
-      name: event.name,
-      location: event.location,
-      date: event.date
+      name: eventData.name,
+      location: eventData.location,
+      startDate: eventData.startDate.split('T')[0],
+      endDate: eventData.endDate.split('T')[0]
     });
-    setEditingEvent(event.id);
+    setEditingEvent(eventData.id);
     setIsDialogOpen(true);
   };
 
-  const handleDelete = (id: string) => {
-    toast.success('Funcionalidad de eliminar evento solo demo.');
+  // Handler para eliminar
+  const handleDelete = async (id: number) => {
+    try {
+      const ok = await deleteEvent(id);
+      if (ok) {
+        setEvents(events.filter(ev => ev.id !== id));
+        toast.success('Evento eliminado exitosamente');
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Error al eliminar evento';
+      toast.error(message);
+    }
   };
 
   return (
@@ -75,7 +120,7 @@ export default function EventosPage() {
                 <DialogTrigger asChild>
                   <Button className="bg-blue-600 hover:bg-blue-700 text-white">
                     <Plus className="h-4 w-4 mr-2" />
-                    Nuevo Evento
+                    {editingEvent ? 'Editar Evento' : 'Nuevo Evento'}
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-md">
@@ -93,6 +138,7 @@ export default function EventosPage() {
                         onChange={(e) => setFormData({...formData, name: e.target.value})}
                         placeholder="Ej: Feria Artesanal Primavera"
                         className="text-base"
+                        required
                       />
                     </div>
                     <div>
@@ -103,16 +149,29 @@ export default function EventosPage() {
                         onChange={(e) => setFormData({...formData, location: e.target.value})}
                         placeholder="Ej: Plaza Central"
                         className="text-base"
+                        required
                       />
                     </div>
                     <div>
-                      <Label htmlFor="date" className="mb-2 block">Fecha *</Label>
+                      <Label htmlFor="startDate" className="mb-2 block">Fecha de Inicio *</Label>
                       <Input
-                        id="date"
+                        id="startDate"
                         type="date"
-                        value={formData.date}
-                        onChange={(e) => setFormData({...formData, date: e.target.value})}
+                        value={formData.startDate}
+                        onChange={(e) => setFormData({...formData, startDate: e.target.value})}
                         className="text-base"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="endDate" className="mb-2 block">Fecha de Fin *</Label>
+                      <Input
+                        id="endDate"
+                        type="date"
+                        value={formData.endDate}
+                        onChange={(e) => setFormData({...formData, endDate: e.target.value})}
+                        className="text-base"
+                        required
                       />
                     </div>
                     <div className="flex gap-2 pt-4">
@@ -129,7 +188,14 @@ export default function EventosPage() {
             </div>
             {/* Lista de eventos */}
             <div className="grid gap-4">
-              {events.length === 0 ? (
+              {loading ? (
+                <Card>
+                  <CardContent className="flex flex-col items-center justify-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    <p className="text-gray-500 mt-4">Cargando eventos...</p>
+                  </CardContent>
+                </Card>
+              ) : events.length === 0 ? (
                 <Card>
                   <CardContent className="flex flex-col items-center justify-center py-12">
                     <Calendar className="h-12 w-12 text-gray-400 mb-4" />
@@ -149,7 +215,8 @@ export default function EventosPage() {
                           </h3>
                           <div className="flex flex-wrap gap-2 mb-2">
                             <span className="text-sm text-gray-600">Ubicación: {event.location}</span>
-                            <span className="text-sm text-gray-600">Fecha: {event.date}</span>
+                            <span className="text-sm text-gray-600">Inicio: {new Date(event.startDate).toLocaleDateString()}</span>
+                            <span className="text-sm text-gray-600">Fin: {new Date(event.endDate).toLocaleDateString()}</span>
                           </div>
                         </div>
                         <div className="flex gap-2">
