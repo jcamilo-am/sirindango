@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { EventListSchema, Event, CreateEventSchema, CreateEvent } from '../models/event';
 
@@ -74,6 +74,12 @@ export function useEvents() {
       setLoading(false);
     }
   };
+
+  // Cargar eventos automáticamente al montar el hook
+  useEffect(() => {
+    fetchEvents();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return {
     events,
