@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { Plus, Edit2, Trash2, Calendar } from 'lucide-react';
+import { Plus, Edit2, Calendar } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AppSidebar } from "@/app/dashboard/components/app-sidebar";
 import { SidebarProvider, SidebarInset } from "@/app/dashboard/components/sidebar";
@@ -25,10 +25,8 @@ export default function EventsPage() {
   const {
     events,
     loading,
-    setEvents,
     createEvent,
     editEvent,
-    deleteEvent,
   } = useEvents();
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -40,34 +38,123 @@ export default function EventsPage() {
     endDate: ''
   });
 
+  // Función para validar el formulario
+  const validateForm = () => {
+    // Validar campos obligatorios
+    if (!formData.name.trim()) {
+      toast.error('El nombre del evento es obligatorio');
+      return false;
+    }
+    
+    if (formData.name.trim().length < 3) {
+      toast.error('El nombre del evento debe tener al menos 3 caracteres');
+      return false;
+    }
+    
+    if (!formData.location.trim()) {
+      toast.error('La ubicación del evento es obligatoria');
+      return false;
+    }
+    
+    if (formData.location.trim().length < 3) {
+      toast.error('La ubicación debe tener al menos 3 caracteres');
+      return false;
+    }
+    
+    if (!formData.startDate) {
+      toast.error('La fecha de inicio es obligatoria');
+      return false;
+    }
+    
+    if (!formData.endDate) {
+      toast.error('La fecha de fin es obligatoria');
+      return false;
+    }
+    
+    // Validar fechas
+    const startDate = new Date(formData.startDate);
+    const endDate = new Date(formData.endDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Resetear horas para comparar solo fechas
+    
+    // Validar que las fechas no sean en el pasado (solo para eventos nuevos)
+    if (!editingEvent) {
+      if (startDate < today) {
+        toast.error('La fecha de inicio no puede ser anterior a hoy');
+        return false;
+      }
+    }
+    
+    // Validar que la fecha de fin no sea anterior a la fecha de inicio
+    if (endDate < startDate) {
+      toast.error('La fecha de fin no puede ser anterior a la fecha de inicio');
+      return false;
+    }
+    
+    // Validar que el evento no dure más de 30 días
+    const diffInDays = (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24);
+    if (diffInDays > 30) {
+      toast.error('El evento no puede durar más de 30 días');
+      return false;
+    }
+    
+    return true;
+  };
+
   // Handler para crear o editar evento
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validar formulario antes de enviar
+    if (!validateForm()) {
+      return;
+    }
+    
     const data = {
-      name: formData.name,
-      location: formData.location,
+      name: formData.name.trim(),
+      location: formData.location.trim(),
       startDate: new Date(formData.startDate).toISOString(),
       endDate: new Date(formData.endDate).toISOString()
     };
+    
     try {
       if (editingEvent) {
         const updated = await editEvent(editingEvent, data);
         if (updated) {
-          setEvents(events.map(ev => ev.id === updated.id ? updated : ev));
           toast.success('Evento actualizado exitosamente');
+          setIsDialogOpen(false);
+          setEditingEvent(null);
+          setFormData({ name: '', location: '', startDate: '', endDate: '' });
+        } else {
+          toast.error('No se pudo actualizar el evento. Inténtalo de nuevo.');
         }
       } else {
         const created = await createEvent(data);
         if (created) {
-          setEvents([...events, created]);
           toast.success('Evento registrado exitosamente');
+          setIsDialogOpen(false);
+          setEditingEvent(null);
+          setFormData({ name: '', location: '', startDate: '', endDate: '' });
+        } else {
+          toast.error('No se pudo crear el evento. Inténtalo de nuevo.');
         }
       }
-      setIsDialogOpen(false);
-      setEditingEvent(null);
-      setFormData({ name: '', location: '', startDate: '', endDate: '' });
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Error al registrar evento';
+      let message = 'Error al procesar el evento';
+      
+      if (err instanceof Error) {
+        // Manejar errores específicos del backend
+        if (err.message.includes('400')) {
+          message = 'Datos inválidos. Verifica la información ingresada.';
+        } else if (err.message.includes('500')) {
+          message = 'Error interno del servidor. Inténtalo más tarde.';
+        } else if (err.message.includes('Network')) {
+          message = 'Error de conexión. Verifica tu conexión a internet.';
+        } else {
+          message = err.message;
+        }
+      }
+      
       toast.error(message);
     }
   };
@@ -77,25 +164,11 @@ export default function EventsPage() {
     setFormData({
       name: eventData.name,
       location: eventData.location,
-      startDate: eventData.startDate.split('T')[0],
-      endDate: eventData.endDate.split('T')[0]
+      startDate: new Date(eventData.startDate).toISOString().split('T')[0],
+      endDate: new Date(eventData.endDate).toISOString().split('T')[0]
     });
     setEditingEvent(eventData.id);
     setIsDialogOpen(true);
-  };
-
-  // Handler para eliminar
-  const handleDelete = async (id: number) => {
-    try {
-      const ok = await deleteEvent(id);
-      if (ok) {
-        setEvents(events.filter(ev => ev.id !== id));
-        toast.success('Evento eliminado exitosamente');
-      }
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Error al eliminar evento';
-      toast.error(message);
-    }
   };
 
   return (
@@ -113,8 +186,8 @@ export default function EventsPage() {
           <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 px-4 lg:px-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div>
-                <h2 className="text-2xl font-bold text-gray-900">Gestión de Eventos</h2>
-                <p className="text-gray-600">Administra los eventos (ferias) registrados</p>
+                <h2 className="text-2xl font-bold text-white">Gestión de Eventos</h2>
+                <p className="text-gray-200">Administra los eventos/ferias registrados</p>
               </div>
               <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogTrigger asChild>
@@ -138,8 +211,12 @@ export default function EventsPage() {
                         onChange={(e) => setFormData({...formData, name: e.target.value})}
                         placeholder="Ej: Feria Artesanal Primavera"
                         className="text-base"
+                        maxLength={100}
                         required
                       />
+                      {formData.name && formData.name.trim().length < 3 && (
+                        <p className="text-xs text-red-500 mt-1">Mínimo 3 caracteres</p>
+                      )}
                     </div>
                     <div>
                       <Label htmlFor="location" className="mb-2 block">Ubicación *</Label>
@@ -149,8 +226,12 @@ export default function EventsPage() {
                         onChange={(e) => setFormData({...formData, location: e.target.value})}
                         placeholder="Ej: Plaza Central"
                         className="text-base"
+                        maxLength={100}
                         required
                       />
+                      {formData.location && formData.location.trim().length < 3 && (
+                        <p className="text-xs text-red-500 mt-1">Mínimo 3 caracteres</p>
+                      )}
                     </div>
                     <div>
                       <Label htmlFor="startDate" className="mb-2 block">Fecha de Inicio *</Label>
@@ -160,6 +241,7 @@ export default function EventsPage() {
                         value={formData.startDate}
                         onChange={(e) => setFormData({...formData, startDate: e.target.value})}
                         className="text-base"
+                        min={new Date().toISOString().split('T')[0]}
                         required
                       />
                     </div>
@@ -171,14 +253,40 @@ export default function EventsPage() {
                         value={formData.endDate}
                         onChange={(e) => setFormData({...formData, endDate: e.target.value})}
                         className="text-base"
+                        min={formData.startDate || new Date().toISOString().split('T')[0]}
                         required
                       />
+                      {formData.startDate && formData.endDate && new Date(formData.endDate) < new Date(formData.startDate) && (
+                        <p className="text-xs text-red-500 mt-1">La fecha de fin debe ser posterior a la fecha de inicio</p>
+                      )}
                     </div>
                     <div className="flex gap-2 pt-4">
-                      <Button type="submit" className="flex-1 bg-blue-600 hover:bg-blue-700">
-                        {editingEvent ? 'Actualizar' : 'Registrar'}
+                      <Button 
+                        type="submit" 
+                        className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50" 
+                        disabled={
+                          !formData.name.trim() || 
+                          !formData.location.trim() || 
+                          !formData.startDate || 
+                          !formData.endDate ||
+                          formData.name.trim().length < 3 ||
+                          formData.location.trim().length < 3 ||
+                          (formData.startDate && formData.endDate && new Date(formData.endDate) < new Date(formData.startDate)) ||
+                          loading
+                        }
+                      >
+                        {loading ? 'Procesando...' : (editingEvent ? 'Actualizar' : 'Registrar')}
                       </Button>
-                      <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        onClick={() => {
+                          setIsDialogOpen(false);
+                          setEditingEvent(null);
+                          setFormData({ name: '', location: '', startDate: '', endDate: '' });
+                        }}
+                        disabled={loading}
+                      >
                         Cancelar
                       </Button>
                     </div>
@@ -210,13 +318,13 @@ export default function EventsPage() {
                     <CardContent className="p-6">
                       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                         <div className="flex-1">
-                          <h3 className="font-semibold text-lg text-gray-900 mb-2">
+                          <h3 className="font-semibold text-3xl text-white mb-2">
                             {event.name}
                           </h3>
                           <div className="flex flex-wrap gap-2 mb-2">
-                            <span className="text-sm text-gray-600">Ubicación: {event.location}</span>
-                            <span className="text-sm text-gray-600">Inicio: {new Date(event.startDate).toLocaleDateString()}</span>
-                            <span className="text-sm text-gray-600">Fin: {new Date(event.endDate).toLocaleDateString()}</span>
+                            <span className="text-sm text-gray-300">Ubicación: {event.location}</span>
+                            <span className="text-sm text-gray-300">Inicio: {new Date(event.startDate).toLocaleDateString()}</span>
+                            <span className="text-sm text-gray-300">Fin: {new Date(event.endDate).toLocaleDateString()}</span>
                           </div>
                         </div>
                         <div className="flex gap-2">
@@ -224,17 +332,10 @@ export default function EventsPage() {
                             variant="outline"
                             size="sm"
                             onClick={() => handleEdit(event)}
-                            className="text-blue-600 hover:text-blue-700"
+                            className="border-blue-600 hover:bg-blue-50"
                           >
-                            <Edit2 className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleDelete(event.id)}
-                            className="text-red-600 hover:text-red-700"
-                          >
-                            <Trash2 className="h-4 w-4" />
+                            <Edit2 className="h-4 w-4 mr-2 text-blue-600" />
+                            <span className="text-white">Editar evento</span>
                           </Button>
                         </div>
                       </div>
