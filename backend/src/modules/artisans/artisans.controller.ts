@@ -1,5 +1,5 @@
 import { Controller, Get, Post, Body, Param, Patch, Delete, ParseIntPipe } from '@nestjs/common';
-import { ArtisanService } from './artisan.service';
+import { ArtisanService } from './artisans.service';
 import { CreateArtisanDto, CreateArtisanSwaggerDto } from './dto/create-artisan.dto';
 import { UpdateArtisanDto, UpdateArtisanSwaggerDto } from './dto/update-artisan.dto';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiParam } from '@nestjs/swagger';

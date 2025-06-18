@@ -1,5 +1,5 @@
 import { Controller, Get, Post, Body, Param, ParseIntPipe, Query } from '@nestjs/common';
-import { SaleService } from './sale.service';
+import { SaleService } from './sales.service';
 import { CreateSaleDto, CreateSaleSwaggerDto } from './dto/create-sale.dto';
 import { UpdateSaleDto, UpdateSaleSwaggerDto } from './dto/update-sale.dto';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiParam, ApiQuery } from '@nestjs/swagger';

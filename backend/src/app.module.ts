@@ -4,10 +4,12 @@ import { zodValidator } from './config/zod-validator';
 import { envSchema } from './config/env.schema';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { PrismaModule } from './modules/prisma/prisma.module';
-import { EventModule } from './modules/event/event.module';
-import { ArtisanModule } from './modules/artisan/artisan.module';
-import { ProductModule } from './modules/product/product.module';
-import { SaleModule } from './modules/sale/sale.module';
+import { EventModule } from './modules/events/events.module';
+import { ArtisanModule } from './modules/artisans/artisans.module';
+import { ProductModule } from './modules/products/products.module';
+import { SaleModule } from './modules/sales/sales.module';
+import { UsersModule } from './modules/users/users.module';
+import { AuthModule } from './modules/auth/auth.module';
 
 @Module({
   imports: [
@@ -19,7 +21,9 @@ import { SaleModule } from './modules/sale/sale.module';
     EventModule,
     ArtisanModule,
     ProductModule,
-    SaleModule
+    SaleModule,
+    UsersModule,
+    AuthModule
   ],
   controllers: [],
   providers: [
