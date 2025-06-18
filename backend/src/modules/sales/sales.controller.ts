@@ -1,10 +1,13 @@
-import { Controller, Get, Post, Body, Param, ParseIntPipe, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, ParseIntPipe, Query, UseGuards } from '@nestjs/common';
 import { SaleService } from './sales.service';
 import { CreateSaleDto, CreateSaleSwaggerDto } from './dto/create-sale.dto';
 import { UpdateSaleDto, UpdateSaleSwaggerDto } from './dto/update-sale.dto';
-import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiParam, ApiQuery } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiParam, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @ApiTags('Ventas')
+@ApiBearerAuth() // <-- Documenta que requiere JWT
+@UseGuards(JwtAuthGuard) // <-- Protege todas las rutas del controlador
 @Controller('sales')
 export class SaleController {
   constructor(private readonly saleService: SaleService) {}

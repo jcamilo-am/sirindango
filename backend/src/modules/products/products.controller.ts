@@ -1,10 +1,13 @@
-import { Controller, Get, Query, Post, Body, Param, Patch, Delete, ParseIntPipe } from '@nestjs/common';
+import { Controller, Get, Query, Post, Body, Param, Patch, Delete, ParseIntPipe, UseGuards } from '@nestjs/common';
 import { ProductService } from './products.service';
 import { CreateProductDto, CreateProductSwaggerDto } from './dto/create-product.dto';
 import { UpdateProductDto, UpdateProductSwaggerDto } from './dto/update-product.dto';
-import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiParam, ApiQuery } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiParam, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @ApiTags('Productos')
+@ApiBearerAuth() // <-- Documenta que requiere JWT en Swagger
+@UseGuards(JwtAuthGuard) // <-- Protege todas las rutas del controlador
 @Controller('products')
 export class ProductController {
   constructor(private readonly productService: ProductService) {}
