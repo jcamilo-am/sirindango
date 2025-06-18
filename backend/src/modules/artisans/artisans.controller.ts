@@ -1,10 +1,13 @@
-import { Controller, Get, Post, Body, Param, Patch, Delete, ParseIntPipe } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Patch, Delete, ParseIntPipe, UseGuards } from '@nestjs/common';
 import { ArtisanService } from './artisans.service';
 import { CreateArtisanDto, CreateArtisanSwaggerDto } from './dto/create-artisan.dto';
 import { UpdateArtisanDto, UpdateArtisanSwaggerDto } from './dto/update-artisan.dto';
-import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiParam } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiParam, ApiBearerAuth } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @ApiTags('Artesanos')
+@ApiBearerAuth() // <-- Documenta que requiere JWT en Swagger
+@UseGuards(JwtAuthGuard) // <-- Protege todas las rutas del controlador
 @Controller('artisans')
 export class ArtisanController {
   constructor(private readonly artisanService: ArtisanService) {}

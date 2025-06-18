@@ -1,11 +1,14 @@
-import { Body, Controller, Get, Post, Param, Patch, Delete, ParseIntPipe, Query } from '@nestjs/common';
+import { Body, Controller, Get, Post, Param, Patch, Delete, ParseIntPipe, Query, UseGuards } from '@nestjs/common';
 import { EventService } from './events.service';
 import { CreateEventDto, CreateEventSwaggerDto } from './dto/create-event.dto';
 import { UpdateEventDto, UpdateEventSwaggerDto } from './dto/update-event.dto';
 import { EventSummarySwaggerDto } from './dto/event-summary.dto';
-import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiParam, ApiQuery } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiParam, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @ApiTags('Eventos')
+@ApiBearerAuth() // <-- Documenta que requiere JWT en Swagger
+@UseGuards(JwtAuthGuard) // <-- Protege todas las rutas del controlador
 @Controller('events')
 export class EventController {
   constructor(private readonly eventService: EventService) {}
