@@ -14,7 +14,7 @@ export class CreateProductSwaggerDto {
   price: number;
 
   @ApiProperty({ example: 10 })
-  availableQuantity: number;
+  initialQuantity: number;
 
   @ApiProperty({ example: 1 })
   eventId: number;
@@ -24,4 +24,7 @@ export class CreateProductSwaggerDto {
 
   @ApiPropertyOptional({ example: 'Bisutería' })
   category?: string;
+
+  @ApiProperty({ example: 10, description: 'Stock actual calculado en base a movimientos' })
+  stock: number;
 }

@@ -13,9 +13,6 @@ export class UpdateProductSwaggerDto {
   @ApiPropertyOptional({ example: 30 })
   price?: number;
 
-  @ApiPropertyOptional({ example: 5 })
-  availableQuantity?: number;
-
   @ApiPropertyOptional({ example: 1 })
   eventId?: number;
 

@@ -18,4 +18,10 @@ export class UpdateEventSwaggerDto {
 
   @ApiPropertyOptional({ example: "2025-07-06T18:00:00.000Z" })
   endDate?: Date;
+
+  @ApiPropertyOptional({ example: 10, description: 'Porcentaje comisión asociación' })
+  commissionAssociation?: number;
+
+  @ApiPropertyOptional({ example: 5, description: 'Porcentaje comisión vendedor' })
+  commissionSeller?: number;
 }

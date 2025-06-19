@@ -18,4 +18,13 @@ export class CreateSaleSwaggerDto {
 
   @ApiProperty({ example: 5 })
   quantitySold: number;
+
+  @ApiProperty({ example: 10000 })
+  valueCharged: number;
+
+  @ApiProperty({ example: 'CASH', enum: ['CASH', 'CARD'] })
+  paymentMethod: 'CASH' | 'CARD';
+
+  @ApiProperty({ example: 2.5, required: false, description: 'Fee descontado por datafono (solo si paymentMethod es CARD)' })
+  cardFee?: number;
 }
