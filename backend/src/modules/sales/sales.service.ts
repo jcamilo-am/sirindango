@@ -111,11 +111,17 @@ export class SaleService {
 
   // Obtiene el stock actual de un producto sumando movimientos
   private async getCurrentStock(productId: number): Promise<number> {
-    const { _sum } = await this.prisma.inventoryMovement.aggregate({
+    const movimientos = await this.prisma.inventoryMovement.findMany({
       where: { productId },
-      _sum: { quantity: true },
+      select: { type: true, quantity: true }
     });
-    return _sum.quantity ?? 0;
+
+    let stock = 0;
+    for (const mov of movimientos) {
+      if (mov.type === 'ENTRADA') stock += mov.quantity;
+      if (mov.type === 'SALIDA') stock -= mov.quantity;
+    }
+    return stock;
   }
 
   // Crea una venta, registra movimiento de inventario y valida reglas de negocio

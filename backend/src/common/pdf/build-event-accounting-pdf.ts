@@ -9,6 +9,25 @@ export function buildEventAccountingPdf(summary: EventAccountingSummaryDto): TDo
     images: {
       logo: LOGO_BASE64
     },
+    header: {
+      columns: [
+        {
+          image: 'logo',
+          width: 50,
+          alignment: 'left'
+        },
+        {
+          stack: [
+            { text: 'ASOCIACION DE ARTESANOS "IUIAI WASI"', alignment: 'center', style: 'orgHeader' },
+            { text: 'Resguardo Inga de Condagua', alignment: 'center', style: 'orgSubHeader' }
+          ],
+          alignment: 'center',
+          margin: [0, 10, 0, 0]
+        }
+      ],
+      margin: [40, 10, 40, 0]
+    },
+    pageMargins: [40, 80, 40, 40],
     footer: function (currentPage, pageCount) {
       return {
         columns: [
@@ -34,24 +53,6 @@ export function buildEventAccountingPdf(summary: EventAccountingSummaryDto): TDo
       };
     },
     content: [
-      {
-        columns: [
-          {
-            image: 'logo',
-            width: 50,
-            alignment: 'left'
-          },
-          {
-            stack: [
-              { text: 'ASOCIACION DE ARTESANOS "IUIAI WASI"', alignment: 'center', style: 'orgHeader' },
-              { text: 'Resguardo Inga de Condagua', alignment: 'center', style: 'orgSubHeader' }
-            ],
-            alignment: 'center',
-            margin: [0, 10, 0, 0]
-          }
-        ],
-        margin: [0, 0, 0, 10]
-      },
       { text: 'RESUMEN CONTABLE DEL EVENTO', style: 'header', alignment: 'center', margin: [0, 0, 0, 10] },
       { text: `Evento: ${summary.eventName}`, style: 'subheader' },
       { text: `Fecha: ${formatDate(summary.startDate)} - ${formatDate(summary.endDate)}` },
@@ -88,10 +89,10 @@ export function buildEventAccountingPdf(summary: EventAccountingSummaryDto): TDo
                   formatDate(sale.date),
                   sale.productName,
                   sale.quantitySold,
-                  `$${sale.unitPrice.toFixed(2)}`,
-                  `$${sale.valueCharged.toFixed(2)}`,
+                  `$${sale.unitPrice.toLocaleString('es-CO', { minimumFractionDigits: 2 })}`,
+                  `$${sale.valueCharged.toLocaleString('es-CO', { minimumFractionDigits: 2 })}`,
                   sale.paymentMethod === 'CASH' ? 'Efectivo' : sale.paymentMethod === 'CARD' ? 'Tarjeta' : (sale.paymentMethod || ''),
-                  sale.cardFee?.toFixed(2) || ''
+                  sale.cardFee ? sale.cardFee.toLocaleString('es-CO', { minimumFractionDigits: 2 }) : ''
                 ])
               ]
             }
@@ -100,11 +101,11 @@ export function buildEventAccountingPdf(summary: EventAccountingSummaryDto): TDo
             table: {
               widths: ['*', 'auto'],
               body: [
-                [{ text: 'Total vendido', bold: true }, { text: `$${artisan.totalSold.toFixed(2)}`, alignment: 'right' }],
-                [{ text: 'Total fee datafono', bold: true }, { text: `$${artisan.totalCardFees.toFixed(2)}`, alignment: 'right' }],
-                [{ text: 'Comisión Asociación', bold: true }, { text: `$${artisan.commissionAssociation.toFixed(2)}`, alignment: 'right' }],
-                [{ text: 'Comisión Vendedor', bold: true }, { text: `$${artisan.commissionSeller.toFixed(2)}`, alignment: 'right' }],
-                [{ text: 'Neto recibido', bold: true, fillColor: '#e0e0e0' }, { text: `$${artisan.netReceived.toFixed(2)}`, alignment: 'right', fillColor: '#e0e0e0' }]
+                [{ text: 'Total vendido', bold: true }, { text: `$${artisan.totalSold.toLocaleString('es-CO', { minimumFractionDigits: 2 })}`, alignment: 'right' }],
+                [{ text: 'Total fee datafono', bold: true }, { text: `$${artisan.totalCardFees.toLocaleString('es-CO', { minimumFractionDigits: 2 })}`, alignment: 'right' }],
+                [{ text: 'Comisión Asociación', bold: true }, { text: `$${artisan.commissionAssociation.toLocaleString('es-CO', { minimumFractionDigits: 2 })}`, alignment: 'right' }],
+                [{ text: 'Comisión Vendedor', bold: true }, { text: `$${artisan.commissionSeller.toLocaleString('es-CO', { minimumFractionDigits: 2 })}`, alignment: 'right' }],
+                [{ text: 'Neto recibido', bold: true, fillColor: '#e0e0e0' }, { text: `$${artisan.netReceived.toLocaleString('es-CO', { minimumFractionDigits: 2 })}`, alignment: 'right', fillColor: '#e0e0e0' }]
               ]
             },
             layout: 'lightHorizontalLines',
@@ -119,11 +120,11 @@ export function buildEventAccountingPdf(summary: EventAccountingSummaryDto): TDo
         table: {
           widths: ['*', 'auto'],
           body: [
-            [{ text: 'Total vendido', bold: true }, { text: `$${summary.totalSold.toFixed(2)}`, alignment: 'right' }],
-            [{ text: 'Total fee datafono', bold: true }, { text: `$${summary.totalCardFees.toFixed(2)}`, alignment: 'right' }],
-            [{ text: 'Comisión Asociación', bold: true }, { text: `$${summary.totalCommissionAssociation.toFixed(2)}`, alignment: 'right' }],
-            [{ text: 'Comisión Vendedor', bold: true }, { text: `$${summary.totalCommissionSeller.toFixed(2)}`, alignment: 'right' }],
-            [{ text: 'Neto recibido', bold: true, fillColor: '#e0e0e0' }, { text: `$${summary.totalNetReceived.toFixed(2)}`, alignment: 'right', fillColor: '#e0e0e0' }]
+            [{ text: 'Total vendido', bold: true }, { text: `$${summary.totalSold.toLocaleString('es-CO', { minimumFractionDigits: 2 })}`, alignment: 'right' }],
+            [{ text: 'Total fee datafono', bold: true }, { text: `$${summary.totalCardFees.toLocaleString('es-CO', { minimumFractionDigits: 2 })}`, alignment: 'right' }],
+            [{ text: 'Comisión Asociación', bold: true }, { text: `$${summary.totalCommissionAssociation.toLocaleString('es-CO', { minimumFractionDigits: 2 })}`, alignment: 'right' }],
+            [{ text: 'Comisión Vendedor', bold: true }, { text: `$${summary.totalCommissionSeller.toLocaleString('es-CO', { minimumFractionDigits: 2 })}`, alignment: 'right' }],
+            [{ text: 'Neto recibido', bold: true, fillColor: '#e0e0e0' }, { text: `$${summary.totalNetReceived.toLocaleString('es-CO', { minimumFractionDigits: 2 })}`, alignment: 'right', fillColor: '#e0e0e0' }]
           ]
         },
         layout: 'lightHorizontalLines',
@@ -133,7 +134,7 @@ export function buildEventAccountingPdf(summary: EventAccountingSummaryDto): TDo
     styles: {
       orgHeader: { fontSize: 12, bold: true },
       orgSubHeader: { fontSize: 10, italics: true },
-      header: { fontSize: 13, bold: true, margin: [0, 0, 0, 10] }, // <--- aquí reducido
+      header: { fontSize: 13, bold: true, margin: [0, 0, 0, 10] },
       subheader: { fontSize: 12, bold: true, margin: [0, 10, 0, 5] },
       artisanHeader: { fontSize: 11, bold: true, margin: [0, 10, 0, 5] }
     }
