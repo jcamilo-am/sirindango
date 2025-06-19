@@ -30,6 +30,9 @@ export class EventArtisanSaleDetailDto {
 
   @ApiPropertyOptional({ example: 0, description: 'Excedente pagado en el cambio (solo para cambios)' })
   valueDifference?: number;
+
+  @ApiProperty()
+  unitPrice: number; // <-- Agrega esto
 }
 
 export class EventArtisanAccountingSummaryDto {
@@ -38,6 +41,9 @@ export class EventArtisanAccountingSummaryDto {
 
   @ApiProperty()
   artisanName: string;
+
+  @ApiProperty()
+  artisanIdentification: string; // <-- Agrega esto
 
   @ApiProperty({ type: [EventArtisanSaleDetailDto] })
   sales: EventArtisanSaleDetailDto[];

@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Body, Param, ParseIntPipe, Query, UseGuards } from '@nestjs/common';
 import { SaleService } from './sales.service';
-import { CreateSaleDto, CreateSaleSwaggerDto } from './dto/create-sale.dto';
+import { CreateMultiSaleDto } from './dto/create-multi-sale.dto';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiParam, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
@@ -16,11 +16,11 @@ export class SaleController {
    * La lógica de validación, movimiento de inventario y stock está en el servicio.
    */
   @Post()
-  @ApiOperation({ summary: 'Crear venta' })
-  @ApiBody({ type: CreateSaleSwaggerDto })
-  @ApiResponse({ status: 201, description: 'Venta creada', type: CreateSaleSwaggerDto })
-  create(@Body() data: CreateSaleDto) {
-    return this.saleService.create(data);
+  @ApiOperation({ summary: 'Crear venta (uno o varios productos en una sola compra)' })
+  @ApiBody({ type: CreateMultiSaleDto })
+  @ApiResponse({ status: 201, description: 'Venta creada', type: CreateMultiSaleDto })
+  async createMultiSale(@Body() data: CreateMultiSaleDto) {
+    return this.saleService.createMultiSale(data);
   }
 
   /**
@@ -31,7 +31,7 @@ export class SaleController {
   @ApiQuery({ name: 'eventId', required: false, type: Number, example: 1 })
   @ApiQuery({ name: 'artisanId', required: false, type: Number, example: 2 })
   @ApiQuery({ name: 'order', required: false, enum: ['date', 'quantity'], example: 'date' })
-  @ApiResponse({ status: 200, description: 'Lista de ventas', type: [CreateSaleSwaggerDto] })
+  @ApiResponse({ status: 200, description: 'Lista de ventas', type: [CreateMultiSaleDto] })
   findAll(
     @Query('eventId') eventId?: string,
     @Query('artisanId') artisanId?: string,
@@ -50,7 +50,7 @@ export class SaleController {
   @Get(':id')
   @ApiOperation({ summary: 'Obtener venta por ID' })
   @ApiParam({ name: 'id', type: Number, example: 1 })
-  @ApiResponse({ status: 200, description: 'Venta encontrada', type: CreateSaleSwaggerDto })
+  @ApiResponse({ status: 200, description: 'Venta encontrada', type: CreateMultiSaleDto })
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.saleService.findOne(id);
   }

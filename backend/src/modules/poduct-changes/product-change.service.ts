@@ -58,6 +58,26 @@ export class ProductChangeService {
       throw new BadRequestException('No hay suficiente stock del producto nuevo');
     }
 
+    // Calcula el excedente esperado
+    const expectedDifference = (data.deliveredProductPrice - productReturned.price) * data.quantity;
+
+    // Permite un margen pequeño por redondeo si quieres (opcional)
+    const margin = 0.01;
+    if (Math.abs(data.valueDifference - expectedDifference) > margin) {
+      throw new BadRequestException(
+        `El excedente ingresado (${data.valueDifference}) no coincide con la diferencia real (${expectedDifference}).`
+      );
+    }
+
+    const deliveredTotal = data.deliveredProductPrice * data.quantity;
+    const returnedTotal = productReturned.price * data.quantity;
+
+    if (deliveredTotal < returnedTotal) {
+      throw new BadRequestException(
+        'No se permite cambiar por un producto de menor valor.'
+      );
+    }
+
     // 4. Transacción: crear cambio y movimientos
     return await this.prisma.$transaction(async (tx) => {
       // Crear el registro de cambio

@@ -245,13 +245,17 @@ export class EventService {
     console.log('productChanges:', productChanges);
 
     // 3. Agrupa por artesano
-    const artisanMap = new Map<number, { artisanName: string, sales: EventArtisanSaleDetailDto[] }>();
+    const artisanMap = new Map<number, { artisanName: string, artisanIdentification: string, sales: EventArtisanSaleDetailDto[] }>();
 
     // Ventas activas
     for (const sale of sales) {
       if (!sale.artisan || !sale.product) continue;
       if (!artisanMap.has(sale.artisanId)) {
-        artisanMap.set(sale.artisanId, { artisanName: sale.artisan.name, sales: [] });
+        artisanMap.set(sale.artisanId, {
+          artisanName: sale.artisan.name,
+          artisanIdentification: sale.artisan.identification, // <-- Asegúrate de incluir esto
+          sales: []
+        });
       }
       artisanMap.get(sale.artisanId)!.sales.push({
         saleId: sale.id,
@@ -259,6 +263,7 @@ export class EventService {
         productId: sale.productId,
         productName: sale.product.name,
         quantitySold: sale.quantitySold,
+        unitPrice: sale.valueCharged / sale.quantitySold,
         valueCharged: sale.valueCharged,
         paymentMethod: sale.paymentMethod,
         cardFee: sale.cardFee ?? 0,
@@ -271,7 +276,11 @@ export class EventService {
       if (!change.sale || !change.sale.artisan || !change.deliveredProduct) continue;
       const artisanId = change.sale.artisanId;
       if (!artisanMap.has(artisanId)) {
-        artisanMap.set(artisanId, { artisanName: change.sale.artisan.name, sales: [] });
+        artisanMap.set(artisanId, {
+          artisanName: change.sale.artisan.name,
+          artisanIdentification: change.sale.artisan.identification, // <-- Igual aquí
+          sales: []
+        });
       }
       artisanMap.get(artisanId)!.sales.push({
         saleId: change.saleId,
@@ -279,10 +288,11 @@ export class EventService {
         productId: change.productDeliveredId,
         productName: change.deliveredProduct.name,
         quantitySold: change.quantity,
+        unitPrice: change.deliveredProductPrice,
         valueCharged: change.deliveredProductPrice * change.quantity,
         paymentMethod: change.paymentMethodDifference === 'CASH' || change.paymentMethodDifference === 'CARD'
-  ? change.paymentMethodDifference as 'CASH' | 'CARD'
-  : undefined,
+          ? change.paymentMethodDifference as 'CASH' | 'CARD'
+          : undefined,
         cardFee: change.cardFeeDifference ?? 0,
         type: 'CAMBIO',
         valueDifference: change.valueDifference ?? 0
@@ -293,7 +303,7 @@ export class EventService {
     const artisans: EventArtisanAccountingSummaryDto[] = [];
     let totalSold = 0, totalCardFees = 0, totalCommissionAssociation = 0, totalCommissionSeller = 0, totalNetReceived = 0;
 
-    for (const [artisanId, { artisanName, sales }] of artisanMap.entries()) {
+    for (const [artisanId, { artisanName, artisanIdentification, sales }] of artisanMap.entries()) {
       // Totales por artesano
       const artisanTotalSold = sales.reduce((sum, s) => sum + s.valueCharged, 0);
       const artisanTotalCardFees = sales.reduce((sum, s) => sum + (s.cardFee ?? 0), 0);
@@ -304,6 +314,7 @@ export class EventService {
       artisans.push({
         artisanId,
         artisanName,
+        artisanIdentification, // <-- Aquí también
         sales,
         totalSold: artisanTotalSold,
         totalCardFees: artisanTotalCardFees,
