@@ -1,8 +1,13 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { CreateEventType } from './types/create-event.type';
 import { UpdateEventType } from './types/update-event.type';
 import { PrismaService } from 'src/modules/prisma/prisma.service';
-import { EventSummaryDto, ProductSummaryDto } from './dto/event-summary.dto';
+import { EventSummaryDto } from './dto/event-summary.dto';
+import {
+  EventAccountingSummaryDto,
+  EventArtisanSaleDetailDto,
+  EventArtisanAccountingSummaryDto,
+} from './dto/event-accounting-summary.dto';
 
 @Injectable()
 export class EventService {
@@ -44,11 +49,66 @@ export class EventService {
 
   // Actualiza un evento, lanza NotFoundException si no existe
   async update(id: number, data: UpdateEventType) {
+    const event = await this.prisma.event.findUnique({ where: { id } });
+    if (!event) throw new NotFoundException('El evento no existe');
+
+    // Busca si hay ventas asociadas a este evento
+    const ventasCount = await this.prisma.sale.count({ where: { eventId: id } });
+
+    // Si hay ventas, solo permite cambiar nombre o ubicación
+    if (ventasCount > 0) {
+      const allowedFields = ['name', 'location'];
+      const keys = Object.keys(data);
+
+      // Si intenta cambiar algo más, rechaza la operación
+      const invalidFields = keys.filter(k => !allowedFields.includes(k));
+      if (invalidFields.length > 0) {
+        throw new BadRequestException(
+          `No puedes modificar ${invalidFields.join(', ')} porque el evento ya tiene ventas registradas.`
+        );
+      }
+    }
+
+    // Si se intenta cambiar fechas, valida que no haya ventas fuera del nuevo rango
+    if ((data.startDate || data.endDate) && ventasCount === 0) {
+      const newStart = data.startDate ?? event.startDate;
+      const newEnd = data.endDate ?? event.endDate;
+
+      if (newStart > newEnd) {
+        throw new BadRequestException('La fecha de inicio no puede ser posterior a la fecha de fin.');
+      }
+    }
+
+    // Si se intenta cambiar comisiones, valida que sean coherentes (0-100) y solo si no hay ventas
+    if (ventasCount === 0) {
+      if (data.commissionAssociation !== undefined && (data.commissionAssociation < 0 || data.commissionAssociation > 100)) {
+        throw new BadRequestException('La comisión de la asociación debe estar entre 0 y 100.');
+      }
+      if (data.commissionSeller !== undefined && (data.commissionSeller < 0 || data.commissionSeller > 100)) {
+        throw new BadRequestException('La comisión del vendedor debe estar entre 0 y 100.');
+      }
+    } else {
+      // Si hay ventas, no permitir cambiar comisiones
+      if (data.commissionAssociation !== undefined || data.commissionSeller !== undefined) {
+        throw new BadRequestException('No puedes modificar las comisiones porque el evento ya tiene ventas registradas.');
+      }
+    }
+
+    // Si el evento está cerrado, solo permite cambiar nombre o ubicación
+    if (event.state === 'CLOSED') {
+      const onlyMeta = Object.keys(data).every(
+        k => k === 'name' || k === 'location'
+      );
+      if (!onlyMeta) {
+        throw new BadRequestException('No puedes modificar fechas ni comisiones de un evento cerrado.');
+      }
+    }
+
+    // Realiza la actualización
     try {
-      const event = await this.prisma.event.update({ where: { id }, data });
-      return this.addStatus(event);
+      const updated = await this.prisma.event.update({ where: { id }, data });
+      return this.addStatus(updated);
     } catch (error) {
-      // Si el evento no existe, el filtro global lo maneja (P2025)
       throw error;
     }
   }
@@ -62,77 +122,216 @@ export class EventService {
   }
 
   // Devuelve el resumen del evento, lanza NotFoundException si no existe
-  async getEventSummary(eventId: number): Promise<EventSummaryDto[]> {
-    // Verifica si el evento existe
+  async getEventSummary(eventId: number): Promise<EventSummaryDto & {
+    sellerCommission: number;
+    mostSoldProduct: { productId: number; name: string; quantitySold: number } | null;
+    topArtisan: { artisanId: number; name: string; totalSold: number } | null;
+    cardFeesTotal: number;
+  }> {
     const event = await this.prisma.event.findUnique({ where: { id: eventId } });
     if (!event) throw new NotFoundException('El evento no existe');
 
-    // Obtiene artesanos con productos en el evento
-    const artisans = await this.prisma.artisan.findMany({
-      where: { products: { some: { eventId } } }
-    });
-
-    // Obtiene productos del evento
-    const products = await this.prisma.product.findMany({
+    // Obtén todas las ventas del evento
+    const sales = await this.prisma.sale.findMany({
       where: { eventId },
-      include: { artisan: true }
+      include: { product: true, artisan: true }
     });
 
-    // Obtiene ventas del evento
-    const sales = await this.prisma.sale.findMany({ where: { eventId } });
+    // Totales por método de pago y total de ventas
+    const paymentTotals = { CASH: 0, CARD: 0 };
+    let totalSales = 0;
+    let cardFeesTotal = 0;
 
-    // Calcula resumen general de productos vendidos
-    const generalProductSummaryMap: Record<number, ProductSummaryDto> = {};
+    // Agrupación para producto más vendido y artesano top
+    const productSalesMap = new Map<number, { name: string; quantitySold: number }>();
+    const artisanSalesMap = new Map<number, { name: string; totalSold: number }>();
+
     for (const sale of sales) {
-      const product = products.find(p => p.id === sale.productId);
-      if (!product) continue;
-      if (!generalProductSummaryMap[product.id]) {
-        generalProductSummaryMap[product.id] = {
-          productId: product.id,
-          name: product.name,
-          quantitySold: 0
-        };
+      const saleTotal = sale.valueCharged;
+      paymentTotals[sale.paymentMethod] += saleTotal;
+      totalSales += saleTotal;
+
+      // Suma fee de datafono si aplica
+      if (sale.paymentMethod === 'CARD' && sale.cardFee) {
+        cardFeesTotal += sale.cardFee;
       }
-      generalProductSummaryMap[product.id].quantitySold! += sale.quantitySold;
+
+      // Agrupa por producto
+      if (!productSalesMap.has(sale.productId)) {
+        productSalesMap.set(sale.productId, { name: sale.product.name, quantitySold: 0 });
+      }
+      productSalesMap.get(sale.productId)!.quantitySold += sale.quantitySold;
+
+      // Agrupa por artesano
+      if (!artisanSalesMap.has(sale.artisanId)) {
+        artisanSalesMap.set(sale.artisanId, { name: sale.artisan.name, totalSold: 0 });
+      }
+      artisanSalesMap.get(sale.artisanId)!.totalSold += saleTotal;
     }
 
-    // Construye resumen por artesano
-    const summary: EventSummaryDto[] = artisans.map(artisan => {
-      const artisanProducts = products.filter(p => p.artisanId === artisan.id);
-      const artisanSales = sales.filter(s => s.artisanId === artisan.id);
+    // Producto más vendido
+    let mostSoldProduct: { productId: number; name: string; quantitySold: number } | null = null;
+    for (const [productId, { name, quantitySold }] of productSalesMap.entries()) {
+      if (!mostSoldProduct || quantitySold > mostSoldProduct.quantitySold) {
+        mostSoldProduct = { productId, name, quantitySold };
+      }
+    }
 
-      const totalRegisteredProducts = artisanProducts.length;
-      const totalSoldProducts = artisanSales.reduce((sum, s) => sum + s.quantitySold, 0);
-      const totalRevenue = artisanSales.reduce((sum, s) => {
-        const prod = products.find(p => p.id === s.productId);
-        return sum + (prod ? prod.price * s.quantitySold : 0);
-      }, 0);
+    // Artesano que más vendió
+    let topArtisan: { artisanId: number; name: string; totalSold: number } | null = null;
+    for (const [artisanId, { name, totalSold }] of artisanSalesMap.entries()) {
+      if (!topArtisan || totalSold > topArtisan.totalSold) {
+        topArtisan = { artisanId, name, totalSold };
+      }
+    }
 
-      const unsoldProducts: ProductSummaryDto[] = artisanProducts
-        .filter(p => p.availableQuantity > 0)
-        .map(p => ({
-          productId: p.id,
-          name: p.name,
-          availableQuantity: p.availableQuantity
-        }));
+    // Comisiones
+    const associationCommission = totalSales * (event.commissionAssociation / 100);
+    const sellerCommission = totalSales * (event.commissionSeller / 100);
+    const netForArtisans = totalSales - associationCommission - sellerCommission;
 
-      const generalProductSummary: ProductSummaryDto[] = artisanProducts.map(p => ({
-        productId: p.id,
-        name: p.name,
-        quantitySold: generalProductSummaryMap[p.id]?.quantitySold || 0
-      }));
+    return {
+      eventId: event.id,
+      eventName: event.name,
+      totalSales,
+      paymentTotals,
+      associationCommission,
+      sellerCommission,
+      netForArtisans,
+      mostSoldProduct,
+      topArtisan,
+      cardFeesTotal,
+    };
+  }
 
-      return {
-        artisanId: artisan.id,
-        artisanName: artisan.name,
-        totalRegisteredProducts,
-        totalSoldProducts,
-        totalRevenue,
-        unsoldProducts,
-        generalProductSummary
-      };
+  // Cierra un evento (cambia estado a CLOSED)
+  async closeEvent(id: number) {
+    const event = await this.prisma.event.findUnique({ where: { id } });
+    if (!event) throw new NotFoundException('El evento no existe');
+    if (event.state === 'CLOSED') throw new BadRequestException('El evento ya está cerrado');
+
+    return this.prisma.event.update({
+      where: { id },
+      data: {
+        state: 'CLOSED',
+        endDate: new Date(), // <-- Actualiza la fecha de fin al momento del cierre
+      },
+    });
+  }
+
+  async getEventAccountingSummary(eventId: number): Promise<EventAccountingSummaryDto> {
+    const event = await this.prisma.event.findUnique({ where: { id: eventId } });
+    if (!event) throw new NotFoundException('Evento no encontrado');
+
+    // 1. Ventas activas
+    const sales = await this.prisma.sale.findMany({
+      where: { eventId, state: 'ACTIVE' },
+      include: { artisan: true, product: true },
+      orderBy: { date: 'asc' }
     });
 
-    return summary;
+    // 2. Cambios en el evento
+    const productChanges = await this.prisma.productChange.findMany({
+      where: { sale: { eventId } },
+      include: {
+        deliveredProduct: true,
+        returnedProduct: true,
+        sale: { include: { artisan: true } }
+      },
+      orderBy: { createdAt: 'asc' }
+    });
+
+    console.log('sales:', sales);
+    console.log('productChanges:', productChanges);
+
+    // 3. Agrupa por artesano
+    const artisanMap = new Map<number, { artisanName: string, sales: EventArtisanSaleDetailDto[] }>();
+
+    // Ventas activas
+    for (const sale of sales) {
+      if (!sale.artisan || !sale.product) continue;
+      if (!artisanMap.has(sale.artisanId)) {
+        artisanMap.set(sale.artisanId, { artisanName: sale.artisan.name, sales: [] });
+      }
+      artisanMap.get(sale.artisanId)!.sales.push({
+        saleId: sale.id,
+        date: sale.date,
+        productId: sale.productId,
+        productName: sale.product.name,
+        quantitySold: sale.quantitySold,
+        valueCharged: sale.valueCharged,
+        paymentMethod: sale.paymentMethod,
+        cardFee: sale.cardFee ?? 0,
+        type: 'VENTA'
+      });
+    }
+
+    // Cambios
+    for (const change of productChanges) {
+      if (!change.sale || !change.sale.artisan || !change.deliveredProduct) continue;
+      const artisanId = change.sale.artisanId;
+      if (!artisanMap.has(artisanId)) {
+        artisanMap.set(artisanId, { artisanName: change.sale.artisan.name, sales: [] });
+      }
+      artisanMap.get(artisanId)!.sales.push({
+        saleId: change.saleId,
+        date: change.createdAt,
+        productId: change.productDeliveredId,
+        productName: change.deliveredProduct.name,
+        quantitySold: change.quantity,
+        valueCharged: change.deliveredProductPrice * change.quantity,
+        paymentMethod: change.paymentMethodDifference === 'CASH' || change.paymentMethodDifference === 'CARD'
+  ? change.paymentMethodDifference as 'CASH' | 'CARD'
+  : undefined,
+        cardFee: change.cardFeeDifference ?? 0,
+        type: 'CAMBIO',
+        valueDifference: change.valueDifference ?? 0
+      });
+    }
+
+    // 4. Calcula totales por artesano y globales
+    const artisans: EventArtisanAccountingSummaryDto[] = [];
+    let totalSold = 0, totalCardFees = 0, totalCommissionAssociation = 0, totalCommissionSeller = 0, totalNetReceived = 0;
+
+    for (const [artisanId, { artisanName, sales }] of artisanMap.entries()) {
+      // Totales por artesano
+      const artisanTotalSold = sales.reduce((sum, s) => sum + s.valueCharged, 0);
+      const artisanTotalCardFees = sales.reduce((sum, s) => sum + (s.cardFee ?? 0), 0);
+      const commissionAssociation = artisanTotalSold * (event.commissionAssociation / 100);
+      const commissionSeller = artisanTotalSold * (event.commissionSeller / 100);
+      const netReceived = artisanTotalSold - commissionAssociation - commissionSeller - artisanTotalCardFees;
+
+      artisans.push({
+        artisanId,
+        artisanName,
+        sales,
+        totalSold: artisanTotalSold,
+        totalCardFees: artisanTotalCardFees,
+        commissionAssociation,
+        commissionSeller,
+        netReceived,
+      });
+
+      totalSold += artisanTotalSold;
+      totalCardFees += artisanTotalCardFees;
+      totalCommissionAssociation += commissionAssociation;
+      totalCommissionSeller += commissionSeller;
+      totalNetReceived += netReceived;
+    }
+
+    return {
+      eventId: event.id,
+      eventName: event.name,
+      startDate: event.startDate,
+      endDate: event.endDate,
+      commissionAssociationPercent: event.commissionAssociation,
+      commissionSellerPercent: event.commissionSeller,
+      artisans,
+      totalSold,
+      totalCardFees,
+      totalCommissionAssociation,
+      totalCommissionSeller,
+      totalNetReceived,
+    };
   }
 }

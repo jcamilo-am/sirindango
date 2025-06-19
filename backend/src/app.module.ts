@@ -10,6 +10,8 @@ import { ProductModule } from './modules/products/products.module';
 import { SaleModule } from './modules/sales/sales.module';
 import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { ProductChangeModule } from './modules/poduct-changes/product-change.module';
+import { PdfMakeService } from './common/pdf/pdfmake.service';
 
 @Module({
   imports: [
@@ -23,7 +25,8 @@ import { AuthModule } from './modules/auth/auth.module';
     ProductModule,
     SaleModule,
     UsersModule,
-    AuthModule
+    AuthModule,
+    ProductChangeModule
   ],
   controllers: [],
   providers: [
@@ -31,6 +34,7 @@ import { AuthModule } from './modules/auth/auth.module';
     provide: 'APP_PIPE',
     useClass: ZodValidationPipe,
     },
+    PdfMakeService
   ],
 })
 export class AppModule {}

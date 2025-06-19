@@ -1,37 +1,34 @@
-import { Controller, Get, Post, Body, Param, Patch, Delete, ParseIntPipe, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Patch, Delete, ParseIntPipe, UseGuards, Query } from '@nestjs/common';
 import { ArtisanService } from './artisans.service';
 import { CreateArtisanDto, CreateArtisanSwaggerDto } from './dto/create-artisan.dto';
 import { UpdateArtisanDto, UpdateArtisanSwaggerDto } from './dto/update-artisan.dto';
-import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiParam, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiParam, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { ArtisanSummarySwaggerDto, ArtisanSummaryContableDto } from './dto/artisan-product-summary.dto';
 
 @ApiTags('Artesanos')
-@ApiBearerAuth() // <-- Documenta que requiere JWT en Swagger
-@UseGuards(JwtAuthGuard) // <-- Protege todas las rutas del controlador
+@ApiBearerAuth() // Swagger: requiere JWT
+@UseGuards(JwtAuthGuard) // Protege todas las rutas con JWT
 @Controller('artisans')
 export class ArtisanController {
   constructor(private readonly artisanService: ArtisanService) {}
 
+  /**
+   * Crea un nuevo artesano.
+   * POST /artisans
+   */
   @Post()
   @ApiOperation({ summary: 'Registrar un nuevo artesano' })
-  @ApiBody({
-    type: CreateArtisanSwaggerDto,
-    examples: {
-      ejemplo: {
-        summary: 'Ejemplo de artesano',
-        value: {
-          name: 'Juana Pérez',
-          identification: '1234567890',
-          active: true,
-        },
-      },
-    },
-  })
+  @ApiBody({ type: CreateArtisanSwaggerDto })
   @ApiResponse({ status: 201, description: 'Artesano creado', type: CreateArtisanSwaggerDto })
   create(@Body() data: CreateArtisanDto) {
     return this.artisanService.create(data);
   }
 
+  /**
+   * Lista todos los artesanos.
+   * GET /artisans
+   */
   @Get()
   @ApiOperation({ summary: 'Listar todos los artesanos' })
   @ApiResponse({ status: 200, description: 'Lista de artesanos', type: [CreateArtisanSwaggerDto] })
@@ -39,6 +36,10 @@ export class ArtisanController {
     return this.artisanService.findAll();
   }
 
+  /**
+   * Obtiene un artesano por ID.
+   * GET /artisans/:id
+   */
   @Get(':id')
   @ApiOperation({ summary: 'Obtener un artesano por ID' })
   @ApiParam({ name: 'id', type: Number, example: 1 })
@@ -47,20 +48,14 @@ export class ArtisanController {
     return this.artisanService.findOne(id);
   }
 
+  /**
+   * Actualiza datos de un artesano.
+   * PATCH /artisans/:id
+   */
   @Patch(':id')
   @ApiOperation({ summary: 'Actualizar datos de un artesano' })
   @ApiParam({ name: 'id', type: Number, example: 1 })
-  @ApiBody({
-    type: UpdateArtisanSwaggerDto,
-    examples: {
-      ejemplo: {
-        summary: 'Actualizar nombre',
-        value: {
-          name: 'Juana Actualizada',
-        },
-      },
-    },
-  })
+  @ApiBody({ type: UpdateArtisanSwaggerDto })
   @ApiResponse({ status: 200, description: 'Artesano actualizado', type: UpdateArtisanSwaggerDto })
   update(
     @Param('id', ParseIntPipe) id: number,
@@ -69,6 +64,10 @@ export class ArtisanController {
     return this.artisanService.update(id, data);
   }
 
+  /**
+   * Elimina un artesano (solo si no tiene productos ni ventas).
+   * DELETE /artisans/:id
+   */
   @Delete(':id')
   @ApiOperation({ summary: 'Eliminar un artesano' })
   @ApiParam({ name: 'id', type: Number, example: 1 })
@@ -77,15 +76,33 @@ export class ArtisanController {
     return this.artisanService.remove(id);
   }
 
-  @Get(':id/by-event/:eventId')
-  @ApiOperation({ summary: 'Obtener productos y ventas de un artesano en un evento' })
-  @ApiParam({ name: 'id', type: Number, example: 1 })
-  @ApiParam({ name: 'eventId', type: Number, example: 2 })
-  @ApiResponse({ status: 200, description: 'Datos del artesano para el evento', type: CreateArtisanSwaggerDto })
-  async findByIdByEvent(
+  /**
+   * Resumen profesional por artesano y evento.
+   * GET /artisans/:id/summary?eventId=2
+   */
+  @Get(':id/summary')
+  @ApiOperation({ summary: 'Resumen por artesano en un evento' })
+  @ApiQuery({ name: 'eventId', type: Number, required: true })
+  @ApiResponse({ status: 200, type: ArtisanSummarySwaggerDto })
+  async getSummary(
     @Param('id', ParseIntPipe) id: number,
-    @Param('eventId', ParseIntPipe) eventId: number,
-  ) {
-    return this.artisanService.findByIdByEvent(id, eventId);
+    @Query('eventId', ParseIntPipe) eventId: number
+  ): Promise<ArtisanSummarySwaggerDto> {
+    return this.artisanService.getSummaryByEvent(id, eventId);
+  }
+
+  /**
+   * Resumen contable detallado por artesano y evento.
+   * GET /artisans/:id/contable-summary?eventId=2
+   */
+  @Get(':id/contable-summary')
+  @ApiOperation({ summary: 'Resumen contable detallado por artesano y evento' })
+  @ApiQuery({ name: 'eventId', type: Number, required: true })
+  @ApiResponse({ status: 200, type: ArtisanSummaryContableDto })
+  async getContableSummary(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('eventId', ParseIntPipe) eventId: number
+  ): Promise<ArtisanSummaryContableDto> {
+    return this.artisanService.getContableSummaryByEvent(id, eventId);
   }
 }

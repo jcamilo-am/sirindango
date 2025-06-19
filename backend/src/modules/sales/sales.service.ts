@@ -1,7 +1,6 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSaleInput } from './types/create-sale.type';
-import { UpdateSaleInput } from './types/update-sale.type';
 
 type FindAllOptions = {
   eventId?: number;
@@ -13,26 +12,30 @@ type FindAllOptions = {
 export class SaleService {
   constructor(private prisma: PrismaService) {}
 
-  // Crea una venta, valida existencia y stock, el filtro global maneja errores de unicidad
+  // Crea una venta, registra movimiento de inventario y valida reglas de negocio
   async create(data: CreateSaleInput) {
-    // Valida existencia de producto, evento y artesano
+    // 1. Validar existencia de producto, evento y artesano
     const product = await this.prisma.product.findUnique({ where: { id: data.productId } });
     if (!product) throw new NotFoundException('El producto no existe');
     const event = await this.prisma.event.findUnique({ where: { id: data.eventId } });
     if (!event) throw new NotFoundException('El evento no existe');
+    if (event.state !== 'ACTIVE') throw new BadRequestException('El evento no está activo');
     const artisan = await this.prisma.artisan.findUnique({ where: { id: data.artisanId } });
     if (!artisan) throw new NotFoundException('El artesano no existe');
 
-    // Valida stock suficiente
-    if (product.availableQuantity < data.quantitySold) {
+    // 2. Validar stock suficiente (usando movimientos)
+    const stock = await this.getCurrentStock(product.id);
+    if (stock < data.quantitySold) {
       throw new BadRequestException('No hay suficiente stock disponible');
     }
 
+    // 3. Transacción: crear venta y movimiento de inventario
     return await this.prisma.$transaction(async (tx) => {
-      // Registra la venta
+      // Crear la venta
       const sale = await tx.sale.create({
         data: {
           ...data,
+          cardFee: data.paymentMethod === 'CARD' ? data.cardFee ?? 0 : null,
           date: new Date(),
         },
         include: {
@@ -40,17 +43,20 @@ export class SaleService {
         },
       });
 
-      // Actualiza la cantidad disponible del producto
-      await tx.product.update({
-        where: { id: data.productId },
+      // Crear movimiento de inventario tipo SALIDA
+      await tx.inventoryMovement.create({
         data: {
-          availableQuantity: {
-            decrement: data.quantitySold,
-          },
+          type: 'SALIDA',
+          quantity: data.quantitySold,
+          reason: 'Venta directa',
+          productId: data.productId,
+          saleId: sale.id,
         },
       });
 
-      // Retorna la venta con totalAmount calculado
+      // Ya NO actualices el stock en Product, solo con movimientos
+
+      // Retornar la venta con totalAmount calculado
       return {
         ...sale,
         totalAmount: sale.product.price * sale.quantitySold,
@@ -80,7 +86,6 @@ export class SaleService {
     return sales.map(sale => ({
       ...sale,
       totalAmount: sale.product.price * sale.quantitySold,
-      // Remover el objeto product anidado para mantener la estructura plana
       product: undefined,
     }));
   }
@@ -101,5 +106,14 @@ export class SaleService {
       totalAmount: sale.product.price * sale.quantitySold,
       product: undefined,
     };
+  }
+
+  // Obtiene el stock actual de un producto sumando movimientos
+  private async getCurrentStock(productId: number): Promise<number> {
+    const { _sum } = await this.prisma.inventoryMovement.aggregate({
+      where: { productId },
+      _sum: { quantity: true },
+    });
+    return _sum.quantity ?? 0;
   }
 }

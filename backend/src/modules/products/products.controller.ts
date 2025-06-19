@@ -6,12 +6,16 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiParam, ApiQuery, ApiBea
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @ApiTags('Productos')
-@ApiBearerAuth() // <-- Documenta que requiere JWT en Swagger
-@UseGuards(JwtAuthGuard) // <-- Protege todas las rutas del controlador
+@ApiBearerAuth() // Documenta que requiere JWT en Swagger
+@UseGuards(JwtAuthGuard) // Protege todas las rutas del controlador
 @Controller('products')
 export class ProductController {
   constructor(private readonly productService: ProductService) {}
 
+  /**
+   * Crea un producto y su movimiento de inventario inicial (ENTRADA).
+   * La lógica de movimiento está en el servicio.
+   */
   @Post()
   @ApiOperation({ summary: 'Crear producto' })
   @ApiBody({ type: CreateProductSwaggerDto })
@@ -20,6 +24,9 @@ export class ProductController {
     return this.productService.create(data);
   }
 
+  /**
+   * Lista productos con filtros opcionales por evento, artesano y orden.
+   */
   @Get()
   @ApiOperation({ summary: 'Listar productos' })
   @ApiQuery({ name: 'eventId', required: false, type: Number, example: 1 })
@@ -38,6 +45,9 @@ export class ProductController {
     });
   }
 
+  /**
+   * Obtiene un producto por ID.
+   */
   @Get(':id')
   @ApiOperation({ summary: 'Obtener producto por ID' })
   @ApiParam({ name: 'id', type: Number, example: 1 })
@@ -46,6 +56,10 @@ export class ProductController {
     return this.productService.findOne(id);
   }
 
+  /**
+   * Actualiza un producto si no tiene ventas asociadas.
+   * La validación está en el servicio.
+   */
   @Patch(':id')
   @ApiOperation({ summary: 'Actualizar producto' })
   @ApiParam({ name: 'id', type: Number, example: 1 })
@@ -55,6 +69,10 @@ export class ProductController {
     return this.productService.update(id, data);
   }
 
+  /**
+   * Elimina un producto si no tiene ventas asociadas.
+   * La validación está en el servicio.
+   */
   @Delete(':id')
   @ApiOperation({ summary: 'Eliminar producto' })
   @ApiParam({ name: 'id', type: Number, example: 1 })

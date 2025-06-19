@@ -8,14 +8,18 @@ datasource db {
 }
 
 model Event {
-  id           Int       @id @default(autoincrement())
-  name         String
-  location     String
-  startDate    DateTime
-  endDate      DateTime
-  products     Product[]
-  sales        Sale[]
-  createdAt    DateTime  @default(now())
+  id                    Int        @id @default(autoincrement())
+  name                  String
+  location              String
+  startDate             DateTime
+  endDate               DateTime
+  commissionAssociation Float
+  commissionSeller      Float
+  state                 EventState @default(ACTIVE)
+
+  products              Product[]
+  sales                 Sale[]
+  createdAt             DateTime   @default(now())
 }
 
 model Artisan {
@@ -29,30 +33,79 @@ model Artisan {
 }
 
 model Product {
-  id                Int       @id @default(autoincrement())
+  id                Int      @id @default(autoincrement())
   name              String
   price             Float
-  availableQuantity Int
-  category          String?   // optional
-  event             Event     @relation(fields: [eventId], references: [id])
+  category          String?
   eventId           Int
-  artisan           Artisan   @relation(fields: [artisanId], references: [id])
   artisanId         Int
-  sales             Sale[]
-  createdAt         DateTime  @default(now())
+  createdAt         DateTime @default(now())
+
+  event     Event               @relation(fields: [eventId], references: [id])
+  artisan   Artisan             @relation(fields: [artisanId], references: [id])
+  sales     Sale[]
+  movements InventoryMovement[]
+
+  // Campos inversos para ProductChange
+  returnedInChanges  ProductChange[] @relation("ReturnedProduct")
+  deliveredInChanges ProductChange[] @relation("DeliveredProduct")
 }
 
 model Sale {
-  id              Int       @id @default(autoincrement())
-  quantitySold    Int
-  date            DateTime  @default(now())
-  product         Product   @relation(fields: [productId], references: [id])
-  productId       Int
-  event           Event     @relation(fields: [eventId], references: [id])
-  eventId         Int
-  artisan         Artisan   @relation(fields: [artisanId], references: [id])
-  artisanId       Int
-  createdAt       DateTime  @default(now())
+  id            Int           @id @default(autoincrement())
+  quantitySold  Int
+  valueCharged  Float // nuevo
+  paymentMethod PaymentMethod // nuevo
+  state         SaleState     @default(ACTIVE) // nuevo
+  cardFee       Float?        // opcional, solo para ventas con tarjeta
+
+  date      DateTime @default(now())
+  productId Int
+  eventId   Int
+  artisanId Int
+
+  product   Product  @relation(fields: [productId], references: [id])
+  event     Event    @relation(fields: [eventId], references: [id])
+  artisan   Artisan  @relation(fields: [artisanId], references: [id])
+  createdAt DateTime @default(now())
+
+  movements InventoryMovement[] // nuevo
+  changes   ProductChange[] // nuevo (cambios desde esta venta)
+}
+
+model InventoryMovement {
+  id        Int          @id @default(autoincrement())
+  type      MovementType
+  quantity  Int
+  reason    String?
+  createdAt DateTime     @default(now())
+
+  productId Int
+  product   Product @relation(fields: [productId], references: [id])
+
+  saleId Int?
+  sale   Sale? @relation(fields: [saleId], references: [id])
+
+  changeId Int?
+  change   ProductChange? @relation(fields: [changeId], references: [id])
+}
+
+model ProductChange {
+  id                      Int      @id @default(autoincrement())
+  saleId                  Int
+  productReturnedId       Int
+  productDeliveredId      Int
+  quantity                Int
+  deliveredProductPrice   Float    // <--- agrega este campo
+  valueDifference         Float    // <--- y estos
+  paymentMethodDifference String?  // o enum PaymentMethod?
+  cardFeeDifference       Float?
+  createdAt               DateTime @default(now())
+
+  sale             Sale                @relation(fields: [saleId], references: [id])
+  returnedProduct  Product             @relation("ReturnedProduct", fields: [productReturnedId], references: [id])
+  deliveredProduct Product             @relation("DeliveredProduct", fields: [productDeliveredId], references: [id])
+  movements        InventoryMovement[]
 }
 
 model User {
@@ -61,4 +114,24 @@ model User {
   password  String
   role      String   @default("admin")
   createdAt DateTime @default(now())
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+}
+
+enum SaleState {
+  ACTIVE
+  CHANGED
+}
+
+enum MovementType {
+  ENTRADA
+  SALIDA
+}
+
+enum EventState {
+  ACTIVE
+  CLOSED
 }
