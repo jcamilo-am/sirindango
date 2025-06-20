@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import { apiClient } from '@/lib/api';
 import { EventListSchema, Event, CreateEventSchema, CreateEvent } from '../models/event';
 
 export function useEvents() {
@@ -12,7 +12,7 @@ export function useEvents() {
     setLoading(true);
     setError(null);
     try {
-      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/events`);
+      const res = await apiClient.get('/events');
       const data = EventListSchema.parse(res.data);
       setEvents(data);
     } catch (err: unknown) {
@@ -29,7 +29,7 @@ export function useEvents() {
     setError(null);
     try {
       const parsed = CreateEventSchema.parse(event);
-      const res = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/events`, parsed);
+      const res = await apiClient.post('/events', parsed);
       setEvents((prev) => [...prev, res.data]);
       return res.data as Event;
     } catch (err: unknown) {
@@ -46,7 +46,7 @@ export function useEvents() {
     setLoading(true);
     setError(null);
     try {
-      const res = await axios.patch(`${process.env.NEXT_PUBLIC_API_URL}/events/${id}`, event);
+      const res = await apiClient.patch(`/events/${id}`, event);
       setEvents((prev) => prev.map((e) => (e.id === id ? res.data : e)));
       return res.data as Event;
     } catch (err: unknown) {
@@ -63,7 +63,7 @@ export function useEvents() {
     setLoading(true);
     setError(null);
     try {
-      await axios.delete(`${process.env.NEXT_PUBLIC_API_URL}/events/${id}`);
+      await apiClient.delete(`/events/${id}`);
       setEvents((prev) => prev.filter((e) => e.id !== id));
       return true;
     } catch (err: unknown) {

@@ -5,7 +5,7 @@ import { AppSidebar } from "@/app/dashboard/components/app-sidebar";
 import {
   SidebarProvider,
   SidebarInset,
-} from "@/app/dashboard/components/sidebar";
+  } from "@/app/dashboard/components/sidebar";
 
 export default function DashboardPage() {
   return (

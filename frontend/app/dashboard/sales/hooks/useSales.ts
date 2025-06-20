@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import axios from 'axios';
+import { apiClient } from '@/lib/api';
 import { SaleListSchema, Sale, CreateSaleSchema, CreateSale } from '../models/sale';
 
 export function useSales() {
@@ -12,7 +12,7 @@ export function useSales() {
     setLoading(true);
     setError(null);
     try {
-      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/sales`);
+      const res = await apiClient.get('/sales');
       const data = SaleListSchema.parse(res.data);
       setSales(data);
     } catch (err: unknown) {
@@ -28,7 +28,7 @@ export function useSales() {
     setError(null);
     try {
       const parsed = CreateSaleSchema.parse(sale);
-      const res = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/sales`, parsed);
+      const res = await apiClient.post('/sales', parsed);
       setSales((prev) => [...prev, res.data]);
       return res.data as Sale;
     } catch (err: unknown) {
@@ -44,7 +44,7 @@ export function useSales() {
     setLoading(true);
     setError(null);
     try {
-      const res = await axios.patch(`${process.env.NEXT_PUBLIC_API_URL}/sales/${id}`, sale);
+      const res = await apiClient.patch(`/sales/${id}`, sale);
       setSales((prev) => prev.map((s) => (s.id === id ? res.data : s)));
       return res.data as Sale;
     } catch (err: unknown) {
@@ -60,7 +60,7 @@ export function useSales() {
     setLoading(true);
     setError(null);
     try {
-      await axios.delete(`${process.env.NEXT_PUBLIC_API_URL}/sales/${id}`);
+      await apiClient.delete(`/sales/${id}`);
       setSales((prev) => prev.filter((s) => s.id !== id));
       return true;
     } catch (err: unknown) {
