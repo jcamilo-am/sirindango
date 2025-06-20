@@ -96,8 +96,8 @@ model ProductChange {
   productReturnedId       Int
   productDeliveredId      Int
   quantity                Int
-  deliveredProductPrice   Float    // <--- agrega este campo
-  valueDifference         Float    // <--- y estos
+  deliveredProductPrice   Float    //
+  valueDifference         Float    //
   paymentMethodDifference String?  // o enum PaymentMethod?
   cardFeeDifference       Float?
   createdAt               DateTime @default(now())
@@ -124,6 +124,7 @@ enum PaymentMethod {
 enum SaleState {
   ACTIVE
   CHANGED
+  CANCELLED // <-- nuevo estado
 }
 
 enum MovementType {

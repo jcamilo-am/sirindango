@@ -9,9 +9,6 @@ export class CreateMultiSaleItemDto {
 
   @ApiProperty()
   quantitySold: number;
-
-  @ApiProperty()
-  valueCharged: number;
 }
 
 export class CreateMultiSaleDto {

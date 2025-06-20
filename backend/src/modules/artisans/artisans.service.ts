@@ -295,6 +295,13 @@ export class ArtisanService {
       orderBy: { date: 'asc' }
     });
 
+    // 1b. Ventas canceladas (solo para historial)
+    const cancelledSales = await this.prisma.sale.findMany({
+      where: { artisanId, eventId, state: 'CANCELLED' },
+      include: { product: true },
+      orderBy: { date: 'asc' }
+    });
+
     // 2. Cambios realizados por este artesano en este evento
     const productChanges = await this.prisma.productChange.findMany({
       where: {
@@ -318,7 +325,22 @@ export class ArtisanService {
       valueCharged: sale.valueCharged,
       paymentMethod: sale.paymentMethod,
       cardFee: sale.cardFee ?? 0,
-      type: 'VENTA'
+      type: 'VENTA',
+      state: 'ACTIVE'
+    }));
+
+    // 3b. Detalle de ventas canceladas (solo historial)
+    const cancelledSalesDetails: ArtisanSaleDetailDto[] = cancelledSales.map(sale => ({
+      saleId: sale.id,
+      date: sale.date,
+      productId: sale.productId,
+      productName: sale.product.name,
+      quantitySold: sale.quantitySold,
+      valueCharged: sale.valueCharged,
+      paymentMethod: sale.paymentMethod,
+      cardFee: sale.cardFee ?? 0,
+      type: 'VENTA',
+      state: 'CANCELLED'
     }));
 
     // 4. Detalle de cambios
@@ -334,13 +356,18 @@ export class ArtisanService {
         : undefined,
       cardFee: change.cardFeeDifference ?? 0,
       type: 'CAMBIO',
-      valueDifference: change.valueDifference ?? 0
+      valueDifference: change.valueDifference ?? 0,
+      state: 'CHANGED' // <-- agrega esto
     }));
 
-    // 5. Unir detalles
-    const allDetails = [...salesDetails, ...changesDetails].sort((a, b) => a.date.getTime() - b.date.getTime());
+    // 5. Unir detalles (ventas activas, canceladas, cambios)
+    const allDetails = [
+      ...salesDetails,
+      ...cancelledSalesDetails,
+      ...changesDetails
+    ].sort((a, b) => a.date.getTime() - b.date.getTime());
 
-    // 6. Totales
+    // 6. Totales (SOLO ventas activas y cambios, NO canceladas)
     const totalSold = sales.reduce((sum, s) => sum + s.valueCharged, 0)
       + productChanges.reduce((sum, c) => sum + (c.deliveredProductPrice * c.quantity), 0);
 

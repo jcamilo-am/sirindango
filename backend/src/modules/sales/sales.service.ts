@@ -20,17 +20,18 @@ export class SaleService {
     // Validación: cantidades y valores positivos
     for (const item of items) {
       if (item.quantitySold <= 0) throw new BadRequestException('La cantidad debe ser mayor a cero.');
-      if (item.valueCharged < 0) throw new BadRequestException('El valor cobrado no puede ser negativo.');
     }
 
     // Validación: fee no negativo
     if (cardFeeTotal < 0) throw new BadRequestException('El fee total no puede ser negativo.');
 
-    // Validación: todos los productos deben ser del mismo evento
+    // Obtén los productos con sus precios
     const products = await this.prisma.product.findMany({
       where: { id: { in: items.map(i => i.productId) } },
-      select: { id: true, eventId: true, artisanId: true }
+      select: { id: true, eventId: true, artisanId: true, price: true }
     });
+
+    // Validación: todos los productos deben ser del mismo evento
     if (products.length !== items.length) throw new BadRequestException('Uno o más productos no existen.');
     if (products.some(p => p.eventId !== eventId)) throw new BadRequestException('Todos los productos deben pertenecer al mismo evento.');
 
@@ -39,14 +40,24 @@ export class SaleService {
     const artisans = await this.prisma.artisan.findMany({ where: { id: { in: artisanIds } } });
     if (artisans.length !== artisanIds.length) throw new BadRequestException('Uno o más artesanos no existen.');
 
+    // Calcula el valor cobrado por cada item
+    const itemsWithValue = items.map(item => {
+      const product = products.find(p => p.id === item.productId);
+      if (!product) throw new BadRequestException('Producto no encontrado');
+      return {
+        ...item,
+        valueCharged: product.price * item.quantitySold,
+      };
+    });
+
     // Prorratea el fee si es tarjeta
-    const total = items.reduce((sum, item) => sum + item.valueCharged, 0);
+    const total = itemsWithValue.reduce((sum, item) => sum + item.valueCharged, 0);
     const feePorItem = paymentMethod === 'CARD'
-      ? items.map(item => ({
+      ? itemsWithValue.map(item => ({
           ...item,
           cardFee: total > 0 ? cardFeeTotal * (item.valueCharged / total) : 0
         }))
-      : items.map(item => ({ ...item, cardFee: 0 }));
+      : itemsWithValue.map(item => ({ ...item, cardFee: 0 }));
 
     // Crea cada venta individualmente
     const results: MultiSaleResult[] = [];
@@ -56,7 +67,7 @@ export class SaleService {
         productId: item.productId,
         artisanId: item.artisanId,
         quantitySold: item.quantitySold,
-        valueCharged: item.valueCharged,
+        valueCharged: item.valueCharged, // Ahora calculado
         paymentMethod,
         cardFee: item.cardFee,
       });
@@ -104,7 +115,7 @@ export class SaleService {
     // Retornar la venta con totalAmount calculado
     return {
       ...sale,
-      totalAmount: sale.product.price * sale.quantitySold,
+      totalAmount: sale.product ? sale.product.price * sale.quantitySold : sale.valueCharged,
       product: undefined,
     };
   }
@@ -147,6 +158,7 @@ export class SaleService {
       const sale = await tx.sale.create({
         data: {
           ...data,
+          valueCharged: data.valueCharged, // <-- agrega esto
           cardFee: data.paymentMethod === 'CARD' ? data.cardFee ?? 0 : null,
           date: new Date(),
         },
@@ -173,6 +185,39 @@ export class SaleService {
         ...sale,
         totalAmount: sale.product.price * sale.quantitySold,
       };
+    });
+  }
+
+  async cancelSale(id: number) {
+    // 1. Busca la venta
+    const sale = await this.prisma.sale.findUnique({ where: { id } });
+    if (!sale) throw new NotFoundException('La venta no existe');
+    if (sale.state !== 'ACTIVE') throw new BadRequestException('Solo puedes anular ventas activas');
+    
+    // 2. No permitir anular ventas de eventos cerrados
+    const event = await this.prisma.event.findUnique({ where: { id: sale.eventId } });
+    if (!event || event.state === 'CLOSED') throw new BadRequestException('No puedes anular ventas de eventos cerrados');
+
+    // 3. Cambia el estado a CANCELLED y regresa el stock
+    return await this.prisma.$transaction(async (tx) => {
+      // Actualiza el estado
+      const cancelledSale = await tx.sale.update({
+        where: { id },
+        data: { state: 'CANCELLED' },
+      });
+
+      // Regresa el stock (movimiento ENTRADA)
+      await tx.inventoryMovement.create({
+        data: {
+          type: 'ENTRADA',
+          quantity: sale.quantitySold,
+          reason: 'Anulación de venta',
+          productId: sale.productId,
+          saleId: sale.id,
+        },
+      });
+
+      return { message: 'Venta anulada', sale: cancelledSale };
     });
   }
 }
