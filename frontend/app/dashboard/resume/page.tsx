@@ -6,7 +6,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { AppSidebar } from "@/app/dashboard/components/app-sidebar"
 import { SidebarProvider, SidebarInset } from "@/app/dashboard/components/sidebar"
-import { SiteHeader } from "@/app/dashboard/components/site-header"
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -62,7 +61,6 @@ export default function ResumePage() {
     >
       <AppSidebar variant="inset" />
       <SidebarInset>
-        <SiteHeader />
         <ToastContainer position="top-right" autoClose={3000} hideProgressBar={false} newestOnTop closeOnClick pauseOnFocusLoss draggable pauseOnHover />
         <div className="flex flex-1 flex-col">
           <div className="@container/main flex flex-1 flex-col gap-2">

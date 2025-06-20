@@ -112,11 +112,33 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+/* Colores personalizados para SIRINDANGO */
+:root {
+  --turquoise: oklch(0.6 0.15 180);
+  --turquoise-light: oklch(0.7 0.12 180);
+  --turquoise-dark: oklch(0.5 0.18 180);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+@layer utilities {
+  .text-turquoise {
+    color: var(--turquoise);
+  }
+  .text-turquoise-light {
+    color: var(--turquoise-light);
+  }
+  .text-turquoise-dark {
+    color: var(--turquoise-dark);
+  }
+  .text-turquoise-500 {
+    color: var(--turquoise);
   }
 }

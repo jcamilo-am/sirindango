@@ -13,7 +13,6 @@ import { Plus, Edit2, Trash2, Package } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AppSidebar } from "@/app/dashboard/components/app-sidebar";
 import { SidebarProvider, SidebarInset } from "@/app/dashboard/components/sidebar";
-import { SiteHeader } from "@/app/dashboard/components/site-header";
 import type { Product, Event, Artisan } from '@/lib/store';
 import { useProducts } from './hooks/useProducts';
 import { CreateProductSchema } from './models/product';
@@ -182,7 +181,6 @@ export default function RegistrarProductoPage() {
     >
       <AppSidebar variant="inset" />
       <SidebarInset>
-        <SiteHeader />
         <ToastContainer position="top-right" autoClose={3000} hideProgressBar={false} newestOnTop closeOnClick pauseOnFocusLoss draggable pauseOnHover />
         <div className="flex flex-1 flex-col">
           <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 px-4 lg:px-6">

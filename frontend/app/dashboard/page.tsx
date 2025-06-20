@@ -6,7 +6,6 @@ import {
   SidebarProvider,
   SidebarInset,
 } from "@/app/dashboard/components/sidebar";
-import { SiteHeader } from "@/app/dashboard/components/site-header";
 
 export default function DashboardPage() {
   return (
@@ -20,7 +19,6 @@ export default function DashboardPage() {
     >
       <AppSidebar variant="inset" />
       <SidebarInset>
-        <SiteHeader />
         <div className="flex flex-1 flex-col items-center justify-center min-h-[calc(100vh-3rem)] bg-gray-50">
           {/* Contenedor principal */}
           <div className="flex flex-col items-center justify-center space-y-2 max-w-4xl mx-auto px-4">
