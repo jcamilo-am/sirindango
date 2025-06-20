@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import axios from 'axios';
+import { apiClient } from '@/lib/api';
 import { ProductListSchema, Product, CreateProductSchema, CreateProduct } from '../models/product';
 
 export function useProducts() {
@@ -12,7 +12,7 @@ export function useProducts() {
     setLoading(true);
     setError(null);
     try {
-      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/products`);
+      const res = await apiClient.get('/products');
       const data = ProductListSchema.parse(res.data);
       setProducts(data);
     } catch (err: unknown) {
@@ -28,7 +28,7 @@ export function useProducts() {
     setError(null);
     try {
       const parsed = CreateProductSchema.parse(product);
-      const res = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/products`, parsed);
+      const res = await apiClient.post('/products', parsed);
       setProducts((prev) => [...prev, res.data]);
       return res.data as Product;
     } catch (err: unknown) {
@@ -44,7 +44,7 @@ export function useProducts() {
     setLoading(true);
     setError(null);
     try {
-      const res = await axios.patch(`${process.env.NEXT_PUBLIC_API_URL}/products/${id}`, product);
+      const res = await apiClient.patch(`/products/${id}`, product);
       setProducts((prev) => prev.map((p) => (p.id === id ? res.data : p)));
       return res.data as Product;
     } catch (err: unknown) {
@@ -60,7 +60,7 @@ export function useProducts() {
     setLoading(true);
     setError(null);
     try {
-      await axios.delete(`${process.env.NEXT_PUBLIC_API_URL}/products/${id}`);
+      await apiClient.delete(`/products/${id}`);
       setProducts((prev) => prev.filter((p) => p.id !== id));
       return true;
     } catch (err: unknown) {

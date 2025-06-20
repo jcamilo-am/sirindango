@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import axios from 'axios';
+import { apiClient } from '@/lib/api';
 import { ArtisanListSchema, Artisan, CreateArtisanSchema, CreateArtisan } from '../models/artisan';
 
 export function useArtisans() {
@@ -12,7 +12,7 @@ export function useArtisans() {
     setLoading(true);
     setError(null);
     try {
-      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/artisans`);
+      const res = await apiClient.get('/artisans');
       const data = ArtisanListSchema.parse(res.data);
       setArtisans(data);
     }catch (err: unknown) {
@@ -28,7 +28,7 @@ export function useArtisans() {
     setError(null);
     try {
       const parsed = CreateArtisanSchema.parse(artisan);
-      const res = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/artisans`, parsed);
+      const res = await apiClient.post('/artisans', parsed);
       setArtisans((prev) => [...prev, res.data]);
       return res.data as Artisan;
     } catch (err: unknown) {
@@ -45,7 +45,7 @@ export function useArtisans() {
     setLoading(true);
     setError(null);
     try {
-      const res = await axios.patch(`${process.env.NEXT_PUBLIC_API_URL}/artisans/${id}`, artisan);
+      const res = await apiClient.patch(`/artisans/${id}`, artisan);
       setArtisans((prev) => prev.map((a) => (a.id === id ? res.data : a)));
       return res.data as Artisan;
     }catch (err: unknown) {
@@ -62,7 +62,7 @@ export function useArtisans() {
     setLoading(true);
     setError(null);
     try {
-      await axios.delete(`${process.env.NEXT_PUBLIC_API_URL}/artisans/${id}`);
+      await apiClient.delete(`/artisans/${id}`);
       setArtisans((prev) => prev.filter((a) => a.id !== id));
       return true;
     } catch (err: unknown) {

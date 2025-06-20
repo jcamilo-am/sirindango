@@ -16,6 +16,7 @@ import { SidebarProvider, SidebarInset } from "@/app/dashboard/components/sideba
 import type { Product, Event, Artisan } from '@/lib/store';
 import { useProducts } from './hooks/useProducts';
 import { CreateProductSchema } from './models/product';
+import { apiClient } from '@/lib/api';
 
 export default function RegistrarProductoPage() {
   const {
@@ -52,21 +53,19 @@ export default function RegistrarProductoPage() {
     // eslint-disable-next-line
   }, []);
 
-  // Fetch de eventos y artesanas (puedes reemplazar por tu API real)
+  // Fetch de eventos y artesanas usando apiClient autenticado
   const fetchEvents = async () => {
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/events`);
-      const data = await res.json();
-      setEvents(data);
+      const res = await apiClient.get('/events');
+      setEvents(res.data);
     } catch {
       toast.error('Error al cargar eventos');
     }
   };
   const fetchArtisans = async () => {
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/artisans`);
-      const data = await res.json();
-      setArtisans(data);
+      const res = await apiClient.get('/artisans');
+      setArtisans(res.data);
     } catch {
       toast.error('Error al cargar artesanas');
     }

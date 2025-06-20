@@ -55,7 +55,7 @@ export default function ArtisansPage() {
       if (editingArtisan) {
         const updated = await editArtisan(editingArtisan, formData);
         if (updated) {
-          setArtisans(artisans.map(a => a.id === updated.id ? updated : a));
+          setArtisans(Array.isArray(artisans) ? artisans.map(a => a.id === updated.id ? updated : a) : [updated]);
           toast.success('Artesana actualizada exitosamente');
         }
       } else {
@@ -181,7 +181,7 @@ export default function ArtisansPage() {
             </div>
             {/* Lista de artesanas */}
             <div className="grid gap-4">
-              {artisans.length === 0 ? (
+              {!Array.isArray(artisans) || artisans.length === 0 ? (
                 <Card>
                   <CardContent className="flex flex-col items-center justify-center py-12">
                     <Users className="h-12 w-12 text-gray-400 mb-4" />
@@ -191,7 +191,7 @@ export default function ArtisansPage() {
                   </CardContent>
                 </Card>
               ) : (
-                artisans.map((artisan) => (
+                Array.isArray(artisans) && artisans.map((artisan) => (
                   <Card key={artisan.id} className="hover:shadow-md transition-shadow">
                     <CardContent className="p-6 bg-background">
                       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
