@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { Plus, Edit2, Trash2, Package } from 'lucide-react';
+import { Plus, Edit2, Trash2, Package, Filter, AlertTriangle } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AppSidebar } from "@/app/dashboard/components/app-sidebar";
 import { SidebarProvider, SidebarInset } from "@/app/dashboard/components/sidebar";
@@ -17,6 +17,9 @@ import type { Product, Event, Artisan } from '@/lib/store';
 import { useProducts } from './hooks/useProducts';
 import { CreateProductSchema } from './models/product';
 import { apiClient } from '@/lib/api';
+import { useEvents } from '../events/hooks/useEvents';
+import { useArtisans } from '../artisans/hooks/useArtisans';
+import { CreateProduct, UpdateProduct } from './models/product';
 
 export default function RegistrarProductoPage() {
   const {
@@ -26,7 +29,12 @@ export default function RegistrarProductoPage() {
     createProduct,
     editProduct,
     deleteProduct,
+    getProductsWithLowStock,
+    getUniqueCategories,
   } = useProducts();
+
+  const { events } = useEvents();
+  const { artisans } = useArtisans();
 
   const [selectedEvent, setSelectedEvent] = useState('');
   const [selectedArtisan, setSelectedArtisan] = useState('');
@@ -40,10 +48,8 @@ export default function RegistrarProductoPage() {
     eventId: '',
     artisanId: ''
   });
-  const [events, setEvents] = useState<Event[]>([]);
-  const [artisans, setArtisans] = useState<Artisan[]>([]);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const categories = ['Textiles', 'Cerámica', 'Joyería', 'Tallado', 'Otros'];
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showLowStock, setShowLowStock] = useState(false);
 
   // Solo fetch de productos con el hook, eventos y artesanas con fetch propio
   useEffect(() => {
@@ -155,7 +161,9 @@ export default function RegistrarProductoPage() {
   const filteredProducts = products.filter(product => {
     if (selectedEvent && product.eventId.toString() !== selectedEvent) return false;
     if (selectedArtisan && product.artisanId.toString() !== selectedArtisan) return false;
-    return true;
+    const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesLowStock = showLowStock ? (product.stock || 0) <= 5 : true;
+    return matchesSearch && matchesLowStock;
   });
 
   const getArtisanName = (artisanId: string) => {
@@ -170,6 +178,9 @@ export default function RegistrarProductoPage() {
   const handleArtisanFilterChange = (value: string) => {
     setSelectedArtisan(value === 'all' ? '' : value);
   };
+
+  const lowStockProducts = getProductsWithLowStock();
+  const categories = getUniqueCategories();
 
   return (
     <SidebarProvider
@@ -308,7 +319,16 @@ export default function RegistrarProductoPage() {
                 <CardTitle className="text-lg">Filtros</CardTitle>
               </CardHeader>
               <CardContent className="bg-background">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div>
+                    <Label htmlFor="search" className="mb-2 block">Buscar por nombre</Label>
+                    <Input
+                      id="search"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      placeholder="Buscar productos..."
+                    />
+                  </div>
                   <div>
                     <Label htmlFor="eventFilter" className="mb-2 block">Filtrar por Feria</Label>
                     <Select value={selectedEvent || 'all'} onValueChange={handleEventFilterChange}>
@@ -341,11 +361,34 @@ export default function RegistrarProductoPage() {
                       </SelectContent>
                     </Select>
                   </div>
+                  <div>
+                    <Label htmlFor="stockFilter" className="mb-2 block">Filtrar por stock</Label>
+                    <Button
+                      variant={showLowStock ? "default" : "outline"}
+                      onClick={() => setShowLowStock(!showLowStock)}
+                      className="w-full"
+                    >
+                      <AlertTriangle className="h-4 w-4 mr-2" />
+                      Stock bajo
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
             {/* Products List */}
             <div className="grid gap-4">
+              {lowStockProducts.length > 0 && (
+                <Card className="bg-yellow-50 border-yellow-200">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 text-yellow-800">
+                      <AlertTriangle className="h-5 w-5" />
+                      <span className="font-medium">
+                        {lowStockProducts.length} productos con stock bajo (≤5 unidades)
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
               {filteredProducts.length === 0 ? (
                 <Card>
                   <CardContent className="flex flex-col items-center justify-center py-12">
