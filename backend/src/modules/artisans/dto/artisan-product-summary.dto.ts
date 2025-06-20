@@ -90,6 +90,9 @@ export class ArtisanSaleDetailDto {
 
   @ApiPropertyOptional({ example: 0, description: 'Excedente pagado en el cambio (solo para cambios)' })
   valueDifference?: number;
+
+  @ApiProperty({ example: 'ACTIVE', enum: ['ACTIVE', 'CANCELLED', 'CHANGED'] })
+  state: 'ACTIVE' | 'CANCELLED' | 'CHANGED';
 }
 
 export class ArtisanSummaryContableDto {

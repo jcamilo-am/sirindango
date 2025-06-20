@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, ParseIntPipe, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, ParseIntPipe, Query, UseGuards, Patch } from '@nestjs/common';
 import { SaleService } from './sales.service';
 import { CreateMultiSaleDto } from './dto/create-multi-sale.dto';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiParam, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
@@ -53,5 +53,16 @@ export class SaleController {
   @ApiResponse({ status: 200, description: 'Venta encontrada', type: CreateMultiSaleDto })
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.saleService.findOne(id);
+  }
+
+  /**
+   * Anula una venta por ID.
+   */
+  @Patch(':id/cancel')
+  @ApiOperation({ summary: 'Anular una venta' })
+  @ApiParam({ name: 'id', type: Number, example: 1 })
+  @ApiResponse({ status: 200, description: 'Venta anulada' })
+  async cancelSale(@Param('id', ParseIntPipe) id: number) {
+    return this.saleService.cancelSale(id);
   }
 }
