@@ -96,9 +96,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     ${isActive ? 'bg-white text-black' : 'text-white'}
                   `}
                 >
-                  <Link href={item.url} className="flex items-center gap-3 w-full">
+                  <Link href={item.url} className="flex items-center gap-3 w-full border-l-4 border-l-orange-500">
                     <item.icon className="h-5 w-5" />
-                    <span className="text-sm">{item.title}</span>
+                    <span className="text-sm ">{item.title}</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
