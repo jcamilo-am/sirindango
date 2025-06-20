@@ -10,11 +10,15 @@ export class ProductService {
 
   // Calcula el stock sumando movimientos usando el cliente recibido
   private async getCurrentStockWithClient(productId: number, prisma: any) {
-    const { _sum } = await prisma.inventoryMovement.aggregate({
-      where: { productId },
+    const entradas = await prisma.inventoryMovement.aggregate({
+      where: { productId, type: 'ENTRADA' },
       _sum: { quantity: true },
     });
-    return _sum.quantity ?? 0;
+    const salidas = await prisma.inventoryMovement.aggregate({
+      where: { productId, type: 'SALIDA' },
+      _sum: { quantity: true },
+    });
+    return (entradas._sum.quantity ?? 0) - (salidas._sum.quantity ?? 0);
   }
 
   // Crea un producto y su movimiento de inventario inicial
@@ -51,11 +55,15 @@ export class ProductService {
 
   // Para métodos fuera de transacción, usa this.prisma
   async getCurrentStock(productId: number) {
-    const { _sum } = await this.prisma.inventoryMovement.aggregate({
-      where: { productId },
+    const entradas = await this.prisma.inventoryMovement.aggregate({
+      where: { productId, type: 'ENTRADA' },
       _sum: { quantity: true },
     });
-    return _sum.quantity ?? 0;
+    const salidas = await this.prisma.inventoryMovement.aggregate({
+      where: { productId, type: 'SALIDA' },
+      _sum: { quantity: true },
+    });
+    return (entradas._sum.quantity ?? 0) - (salidas._sum.quantity ?? 0);
   }
 
   // Busca productos con filtros opcionales y retorna el stock calculado
