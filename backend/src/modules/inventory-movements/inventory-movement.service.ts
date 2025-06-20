@@ -128,10 +128,14 @@ export class InventoryMovementService {
 
   // Utilidad para stock actual
   private async getCurrentStock(productId: number): Promise<number> {
-    const { _sum } = await this.prisma.inventoryMovement.aggregate({
-      where: { productId },
+    const entradas = await this.prisma.inventoryMovement.aggregate({
+      where: { productId, type: 'ENTRADA' },
       _sum: { quantity: true },
     });
-    return _sum.quantity ?? 0;
+    const salidas = await this.prisma.inventoryMovement.aggregate({
+      where: { productId, type: 'SALIDA' },
+      _sum: { quantity: true },
+    });
+    return (entradas._sum.quantity ?? 0) - (salidas._sum.quantity ?? 0);
   }
 }
