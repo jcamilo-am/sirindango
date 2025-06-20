@@ -12,7 +12,6 @@ import { ShoppingCart, CheckCircle } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { AppSidebar } from "@/app/dashboard/components/app-sidebar";
 import { SidebarProvider, SidebarInset } from "@/app/dashboard/components/sidebar";
-import { SiteHeader } from "@/app/dashboard/components/site-header";
 import { useSales } from './hooks/useSales';
 import { useProducts } from '../products/hooks/useProducts';
 import { useArtisans } from '../artisans/hooks/useArtisans';
@@ -159,7 +158,6 @@ export default function RegistrarVentaPage() {
     >
       <AppSidebar variant="inset" />
       <SidebarInset>
-        <SiteHeader />
         <ToastContainer position="top-right" autoClose={3000} hideProgressBar={false} newestOnTop closeOnClick pauseOnFocusLoss draggable pauseOnHover />
         <div className="flex flex-1 flex-col">
           <div className="space-y-6 py-4 md:py-6 px-4 lg:px-6">
