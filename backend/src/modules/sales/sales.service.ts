@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateSaleInput } from './types/create-sale.type';
 import { CreateMultiSaleDto } from './dto/create-multi-sale.dto';
 import { FindAllOptions, MultiSaleResult } from './types/sale.type';
+import { getEventStatus } from '../events/utils/event-status.util';
 
 
 @Injectable()
@@ -142,7 +143,11 @@ export class SaleService {
     if (!product) throw new NotFoundException('El producto no existe');
     const event = await this.prisma.event.findUnique({ where: { id: data.eventId } });
     if (!event) throw new NotFoundException('El evento no existe');
-    if (event.state !== 'ACTIVE') throw new BadRequestException('El evento no está activo');
+
+    // Usa el estado calculado
+    const status = getEventStatus(event);
+    if (status !== 'ACTIVE') throw new BadRequestException('Solo puedes registrar ventas cuando el evento está en curso.');
+
     const artisan = await this.prisma.artisan.findUnique({ where: { id: data.artisanId } });
     if (!artisan) throw new NotFoundException('El artesano no existe');
 
@@ -194,9 +199,11 @@ export class SaleService {
     if (!sale) throw new NotFoundException('La venta no existe');
     if (sale.state !== 'ACTIVE') throw new BadRequestException('Solo puedes anular ventas activas');
     
-    // 2. No permitir anular ventas de eventos cerrados
+    // 2. No permitir anular ventas de eventos cerrados o no activos
     const event = await this.prisma.event.findUnique({ where: { id: sale.eventId } });
-    if (!event || event.state === 'CLOSED') throw new BadRequestException('No puedes anular ventas de eventos cerrados');
+    if (!event) throw new NotFoundException('El evento no existe');
+    const status = getEventStatus(event);
+    if (status !== 'ACTIVE') throw new BadRequestException('No puedes anular ventas de eventos no activos');
 
     // 3. Cambia el estado a CANCELLED y regresa el stock
     return await this.prisma.$transaction(async (tx) => {

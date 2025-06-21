@@ -53,19 +53,26 @@ export class ArtisanService {
     const artisan = await this.prisma.artisan.findUnique({ where: { id } });
     if (!artisan) throw new NotFoundException('El artesano no existe');
 
-    // 2. Si se intenta cambiar identificación, valida unicidad
+    // 2. Si tiene ventas, solo permite cambiar 'active'
+    const salesCount = await this.prisma.sale.count({ where: { artisanId: id } });
+    const onlyActive = Object.keys(data).every(k => k === 'active');
+    if (salesCount > 0 && !onlyActive) {
+      throw new BadRequestException('No se puede editar un artesano que ya tiene ventas registradas. Solo puedes cambiar su estado activo/inactivo.');
+    }
+
+    // 3. Si se intenta cambiar identificación, valida unicidad
     if (data.identification && data.identification !== artisan.identification) {
       const exists = await this.prisma.artisan.findUnique({ where: { identification: data.identification } });
       if (exists) throw new BadRequestException('Ya existe un artesano con esa identificación.');
     }
 
-    // 3. Si se intenta cambiar nombre, valida unicidad (opcional)
+    // 4. Si se intenta cambiar nombre, valida unicidad (opcional)
     if (data.name && data.name !== artisan.name) {
       const exists = await this.prisma.artisan.findFirst({ where: { name: data.name, NOT: { id } } });
       if (exists) throw new BadRequestException('Ya existe un artesano con ese nombre.');
     }
 
-    // 4. Si se intenta desactivar, valida que no tenga productos activos ni ventas activas
+    // 5. Si se intenta desactivar, valida que no tenga productos activos ni ventas activas
     if (data.active === false) {
       const productsCount = await this.prisma.product.count({ where: { artisanId: id } });
       if (productsCount > 0) {
@@ -77,7 +84,7 @@ export class ArtisanService {
       }
     }
 
-    // 5. Actualiza
+    // 6. Actualiza
     try {
       return await this.prisma.artisan.update({ where: { id }, data });
     } catch (error) {

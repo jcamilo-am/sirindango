@@ -1,9 +1,17 @@
 import { EventAccountingSummaryDto } from '../../modules/events/dto/event-accounting-summary.dto';
 import { TDocumentDefinitions } from 'pdfmake/interfaces';
 import { LOGO_BASE64 } from './logo-base64';
+import { getEventStatus } from '../../modules/events/utils/event-status.util';
 
 export function buildEventAccountingPdf(summary: EventAccountingSummaryDto): TDocumentDefinitions {
   const currentDate = new Date();
+
+  // Calcula el estado del evento para mostrarlo en el PDF
+  const eventStatus = getEventStatus({
+    startDate: summary.startDate,
+    endDate: summary.endDate,
+    state: 'CLOSED', // Si tienes el campo real, pásalo aquí; si no, usa 'CLOSED' solo como ejemplo
+  });
 
   return {
     images: {
@@ -56,6 +64,7 @@ export function buildEventAccountingPdf(summary: EventAccountingSummaryDto): TDo
       { text: 'RESUMEN CONTABLE DEL EVENTO', style: 'header', alignment: 'center', margin: [0, 0, 0, 10] },
       { text: `Evento: ${summary.eventName}`, style: 'subheader' },
       { text: `Fecha: ${formatDate(summary.startDate)} - ${formatDate(summary.endDate)}` },
+      { text: `Estado: ${eventStatus}`, italics: true, fontSize: 10, margin: [0, 0, 0, 5] }, // <--- ESTADO AQUÍ
       { text: `Comisión Asociación: ${summary.commissionAssociationPercent}%` },
       { text: `Comisión Vendedor: ${summary.commissionSellerPercent}%` },
       { text: '\n' },

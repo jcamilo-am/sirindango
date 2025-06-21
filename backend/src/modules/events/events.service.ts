@@ -8,19 +8,15 @@ import {
   EventArtisanSaleDetailDto,
   EventArtisanAccountingSummaryDto,
 } from './dto/event-accounting-summary.dto';
+import { getEventStatus } from './utils/event-status.util';
 
 @Injectable()
 export class EventService {
   constructor(private readonly prisma: PrismaService) {}
 
   // Agrega el estado al evento según la fecha actual
-  private addStatus(event: CreateEventType) {
-    const now = new Date();
-    let status: 'scheduled' | 'active' | 'finished';
-    if (now < event.startDate) status = 'scheduled';
-    else if (now > event.endDate) status = 'finished';
-    else status = 'active';
-    return { ...event, status };
+  private addStatus(event: any) {
+    return { ...event, status: getEventStatus(event) };
   }
 
   // Crea un evento y agrega el estado
@@ -51,6 +47,13 @@ export class EventService {
   async update(id: number, data: UpdateEventType) {
     const event = await this.prisma.event.findUnique({ where: { id } });
     if (!event) throw new NotFoundException('El evento no existe');
+
+    const status = getEventStatus(event);
+
+    // Solo permite editar si está SCHEDULED
+    if (status !== 'SCHEDULED') {
+      throw new BadRequestException('Solo puedes editar eventos que aún no han iniciado.');
+    }
 
     // Busca si hay ventas asociadas a este evento
     const ventasCount = await this.prisma.sale.count({ where: { eventId: id } });
@@ -91,16 +94,6 @@ export class EventService {
       // Si hay ventas, no permitir cambiar comisiones
       if (data.commissionAssociation !== undefined || data.commissionSeller !== undefined) {
         throw new BadRequestException('No puedes modificar las comisiones porque el evento ya tiene ventas registradas.');
-      }
-    }
-
-    // Si el evento está cerrado, solo permite cambiar nombre o ubicación
-    if (event.state === 'CLOSED') {
-      const onlyMeta = Object.keys(data).every(
-        k => k === 'name' || k === 'location'
-      );
-      if (!onlyMeta) {
-        throw new BadRequestException('No puedes modificar fechas ni comisiones de un evento cerrado.');
       }
     }
 
@@ -208,13 +201,19 @@ export class EventService {
   async closeEvent(id: number) {
     const event = await this.prisma.event.findUnique({ where: { id } });
     if (!event) throw new NotFoundException('El evento no existe');
-    if (event.state === 'CLOSED') throw new BadRequestException('El evento ya está cerrado');
+
+    const status = getEventStatus(event);
+
+    // Solo permite cerrar si está ACTIVE
+    if (status !== 'ACTIVE') {
+      throw new BadRequestException('Solo puedes cerrar eventos que están en curso.');
+    }
 
     return this.prisma.event.update({
       where: { id },
       data: {
         state: 'CLOSED',
-        endDate: new Date(), // <-- Actualiza la fecha de fin al momento del cierre
+        endDate: new Date(),
       },
     });
   }
