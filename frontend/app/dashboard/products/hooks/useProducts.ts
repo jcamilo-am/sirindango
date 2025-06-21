@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { apiClient } from '@/lib/api';
 import { 
   ProductListSchema, 
@@ -6,7 +6,7 @@ import {
   CreateProductSchema, 
   CreateProduct, 
   UpdateProduct,
-  ProductFilters 
+  ProductFilters
 } from '../models/product';
 
 export function useProducts() {
@@ -31,9 +31,11 @@ export function useProducts() {
       const res = await apiClient.get(url);
       const data = ProductListSchema.parse(res.data);
       setProducts(data);
+      return data;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Error al cargar productos';
       setError(message);
+      throw err; // Preservar el error original
     } finally {
       setLoading(false);
     }
@@ -49,7 +51,7 @@ export function useProducts() {
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Error al cargar producto';
       setError(message);
-      return null;
+      throw err; // Preservar el error original
     } finally {
       setLoading(false);
     }
@@ -62,12 +64,13 @@ export function useProducts() {
     try {
       const parsed = CreateProductSchema.parse(product);
       const res = await apiClient.post('/products', parsed);
-      setProducts((prev) => [...prev, res.data]);
-      return res.data as Product;
+      const newProduct = res.data as Product;
+      setProducts((prev) => [...prev, newProduct]);
+      return newProduct;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Error al crear producto';
       setError(message);
-      return null;
+      throw err; // Preservar el error original
     } finally {
       setLoading(false);
     }
@@ -79,12 +82,13 @@ export function useProducts() {
     setError(null);
     try {
       const res = await apiClient.patch(`/products/${id}`, product);
-      setProducts((prev) => prev.map((p) => (p.id === id ? res.data : p)));
-      return res.data as Product;
+      const updatedProduct = res.data as Product;
+      setProducts((prev) => prev.map((p) => (p.id === id ? updatedProduct : p)));
+      return updatedProduct;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Error al actualizar producto';
       setError(message);
-      return null;
+      throw err; // Preservar el error original
     } finally {
       setLoading(false);
     }
@@ -101,7 +105,7 @@ export function useProducts() {
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Error al eliminar producto';
       setError(message);
-      return false;
+      throw err; // Preservar el error original
     } finally {
       setLoading(false);
     }
@@ -148,14 +152,32 @@ export function useProducts() {
     const categories = products
       .map(product => product.category)
       .filter((category): category is string => !!category);
-    return [...new Set(categories)];
+    
+    // Agregar categorías por defecto si no hay productos
+    const defaultCategories = [
+      'Bisutería',
+      'Tejidos',
+      'Cerámicas',
+      'Artesanías',
+      'Accesorios',
+      'Decoración'
+    ];
+    
+    const allCategories = [...new Set([...categories, ...defaultCategories])];
+    return allCategories.sort();
   };
 
-  // Cargar productos automáticamente al montar el hook
-  useEffect(() => {
-    fetchProducts();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Función para obtener stock actualizado de un producto específico
+  const refreshProductStock = async (productId: number) => {
+    try {
+      const product = await fetchProductById(productId);
+      if (product) {
+        setProducts((prev) => prev.map((p) => (p.id === productId ? product : p)));
+      }
+    } catch (err) {
+      console.error('Error al actualizar stock del producto:', err);
+    }
+  };
 
   return {
     products,
@@ -176,5 +198,6 @@ export function useProducts() {
     getProductsOrderedByStock,
     getProductsOrderedByName,
     getUniqueCategories,
+    refreshProductStock,
   };
 } 

@@ -9,10 +9,12 @@ import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { Plus, Edit2, Trash2, Users } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
 import { AppSidebar } from "@/app/dashboard/components/app-sidebar";
 import { SidebarProvider, SidebarInset } from "@/app/dashboard/components/sidebar";
 import { useArtisans } from './hooks/useArtisans';
 import { CreateArtisanSchema } from './models/artisan';
+import { useDataStore } from '@/lib/store';
 
 export default function ArtisansPage() {
   const {
@@ -24,6 +26,8 @@ export default function ArtisansPage() {
     deleteArtisan,
   } = useArtisans();
 
+  const { setArtisans: setGlobalArtisans, addArtisan, updateArtisan, removeArtisan } = useDataStore();
+
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingArtisan, setEditingArtisan] = useState<number | null>(null);
   const [formData, setFormData] = useState({
@@ -34,13 +38,85 @@ export default function ArtisansPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    fetchArtisans();
+    const loadData = async () => {
+      try {
+        const artisansData = await fetchArtisans();
+        setGlobalArtisans(artisansData); // Sincronizar con store global
+      } catch (error) {
+        console.error('Error loading artisans:', error);
+      }
+    };
+    loadData();
     // eslint-disable-next-line
   }, []);
+
+  // Función para validar nombre en tiempo real
+  const validateName = (name: string): string | null => {
+    if (!name) return null;
+    if (!/^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$/.test(name)) {
+      return 'El nombre solo puede contener letras y espacios';
+    }
+    if (name.length > 50) {
+      return 'El nombre es muy largo (máximo 50 caracteres)';
+    }
+    return null;
+  };
+
+  // Función para validar identificación en tiempo real
+  const validateIdentification = (identification: string): string | null => {
+    if (!identification) return null;
+    if (!/^\d+$/.test(identification)) {
+      return 'La identificación solo puede contener números';
+    }
+    if (identification.length < 5) {
+      return 'La identificación debe tener al menos 5 números';
+    }
+    if (identification.length > 10) {
+      return 'La identificación debe tener máximo 10 números';
+    }
+    return null;
+  };
+
+  // Función para manejar cambios en el nombre
+  const handleNameChange = (value: string) => {
+    // Filtrar caracteres no permitidos
+    const filteredValue = value.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]/g, '');
+    setFormData({ ...formData, name: filteredValue });
+    
+    // Validar en tiempo real
+    const error = validateName(filteredValue);
+    setErrors(prev => ({ ...prev, name: error || '' }));
+  };
+
+  // Función para manejar cambios en la identificación
+  const handleIdentificationChange = (value: string) => {
+    // Filtrar caracteres no permitidos y limitar a 10 dígitos
+    const filteredValue = value.replace(/[^\d]/g, '').slice(0, 10);
+    setFormData({ ...formData, identification: filteredValue });
+    
+    // Validar en tiempo real
+    const error = validateIdentification(filteredValue);
+    setErrors(prev => ({ ...prev, identification: error || '' }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrors({});
+    
+    // Validación previa con nuestras funciones personalizadas
+    const nameError = validateName(formData.name);
+    const identificationError = validateIdentification(formData.identification);
+    
+    if (nameError || identificationError) {
+      setErrors({
+        name: nameError || '',
+        identification: identificationError || ''
+      });
+      toast.error('Por favor corrija los errores en el formulario');
+      return;
+    }
+    
+    // Validación con Zod
     const result = CreateArtisanSchema.safeParse(formData);
     if (!result.success) {
       const newErrors: Record<string, string> = {};
@@ -51,24 +127,34 @@ export default function ArtisansPage() {
       toast.error('Por favor corrija los errores en el formulario');
       return;
     }
+    
     try {
       if (editingArtisan) {
         const updated = await editArtisan(editingArtisan, formData);
         if (updated) {
           setArtisans(Array.isArray(artisans) ? artisans.map(a => a.id === updated.id ? updated : a) : [updated]);
-          toast.success('Artesana actualizada exitosamente');
+          updateArtisan(updated.id, updated); // Actualizar en store global
+          toast.success('Artesano actualizada exitosamente');
         }
       } else {
         const created = await createArtisan(formData);
         if (created) {
           setArtisans([...artisans, created]);
-          toast.success('Artesana registrada exitosamente');
+          addArtisan(created); // Agregar al store global
+          toast.success('Artesano registrado exitosamente');
         }
       }
       resetForm();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Error al guardar artesana';
-      toast.error(message);
+      const message = err instanceof Error ? err.message : 'Error al guardar artesano';
+      
+      // Manejar específicamente el error de identificación duplicada
+      if (message.includes('identificación')) {
+        setErrors({ identification: message });
+        toast.error(message);
+      } else {
+        toast.error(message);
+      }
     }
   };
 
@@ -80,6 +166,7 @@ export default function ArtisansPage() {
     });
     setEditingArtisan(null);
     setIsDialogOpen(false);
+    setErrors({});
   };
 
   const handleEdit = (artisan: { id: number; name: string; identification: string; active: boolean }) => {
@@ -97,10 +184,11 @@ export default function ArtisansPage() {
       const ok = await deleteArtisan(id);
       if (ok) {
         setArtisans(artisans.filter(a => a.id !== id));
-        toast.success('Artesana eliminada exitosamente');
+        removeArtisan(id); // Remover del store global
+        toast.success('Artesano eliminada exitosamente');
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Error al eliminar artesana';
+      const message = err instanceof Error ? err.message : 'Error al eliminar artesano';
       toast.error(message);
     }
   };
@@ -119,14 +207,14 @@ export default function ArtisansPage() {
           <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 px-4 lg:px-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div>
-                <h2 className="text-2xl font-bold text-foreground">Gestión de Artesanas</h2>
-                <p className="text-muted-foreground">Registra y administra las artesanas</p>
+                <h2 className="text-2xl font-bold text-foreground">Gestión de Artesanos</h2>
+                <p className="text-muted-foreground">Registra y administra los artesanos</p>
               </div>
               <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogTrigger asChild>
                   <Button className="bg-pink-600 hover:bg-pink-700 text-white">
                     <Plus className="h-4 w-4 mr-2 text-primary" />
-                    Nueva Artesana
+                    Nuevo Artesano
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-md">
@@ -137,26 +225,30 @@ export default function ArtisansPage() {
                   </DialogHeader>
                   <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
-                      <Label htmlFor="name" className="mb-2 block">Nombre de la Artesana *</Label>
+                      <Label htmlFor="name" className="mb-2 block">Nombre del Artesano *</Label>
                       <Input
                         id="name"
                         value={formData.name}
-                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                        onChange={(e) => handleNameChange(e.target.value)}
                         placeholder="Ej: Juana Pérez"
-                        className={`text-base bg-background text-foreground border-border focus:border-primary ${errors.name ? 'border-red-500' : ''}`}
+                        className={`text-base bg-background text-foreground border-border focus:border-primary ${errors.name ? 'border-red-500 focus:border-red-500' : ''}`}
+                        maxLength={100}
                       />
-                      {errors.name && <p className="text-red-500 text-sm mt-1">{errors.name}</p>}
+                      {errors.name && <p className="text-red-500 text-sm mt-1 font-medium">{errors.name}</p>}
                     </div>
                     <div>
-                      <Label htmlFor="identification">Identificación *</Label>
+                      <Label htmlFor="identification" className="mb-2">Identificación *</Label>
                       <Input
                         id="identification"
                         value={formData.identification}
-                        onChange={e => setFormData({ ...formData, identification: e.target.value })}
-                        placeholder="Ej: 12345678"
-                        className={errors.identification ? 'border-red-500' : ''}
+                        onChange={(e) => handleIdentificationChange(e.target.value)}
+                        placeholder="Ej: 12345678 (5-10 números)"
+                        className={`${errors.identification ? 'border-red-500 focus:border-red-500' : ''}`}
+                        maxLength={10}
+                        inputMode="numeric"
+                        pattern="[0-9]*"
                       />
-                      {errors.identification && <p className="text-red-500 text-sm mt-1">{errors.identification}</p>}
+                      {errors.identification && <p className="text-red-500 text-sm mt-1 font-medium">{errors.identification}</p>}
                     </div>
                     <div className="flex items-center gap-2">
                       <input
@@ -165,7 +257,7 @@ export default function ArtisansPage() {
                         checked={formData.active}
                         onChange={e => setFormData({ ...formData, active: e.target.checked })}
                       />
-                      <Label htmlFor="active">Activa</Label>
+                      <Label htmlFor="active">Activo</Label>
                     </div>
                     <div className="flex gap-2 pt-4">
                       <Button type="submit" className="flex-1 bg-pink-600 hover:bg-pink-700 text-white">
@@ -186,7 +278,7 @@ export default function ArtisansPage() {
                   <CardContent className="flex flex-col items-center justify-center py-12">
                     <Users className="h-12 w-12 text-gray-400 mb-4" />
                     <p className="text-gray-500 text-center">
-                      No hay artesanas registradas
+                      No hay artesanos registrados
                     </p>
                   </CardContent>
                 </Card>
@@ -196,26 +288,35 @@ export default function ArtisansPage() {
                     <CardContent className="p-6 bg-background">
                       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                         <div className="flex-1">
-                          <h3 className="font-semibold text-lg text-foreground mb-2">
-                            {artisan.name}
-                          </h3>
+                          <div className="flex items-center gap-2 mb-2">
+                            <h3 className="font-semibold text-lg text-foreground">
+                              {artisan.name}
+                            </h3>
+                            <Badge 
+                              variant={artisan.active ? "default" : "destructive"}
+                              className={artisan.active ? "bg-green-100 text-green-800 border-green-200" : ""}
+                            >
+                              {artisan.active ? "Activo" : "Inactivo"}
+                            </Badge>
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            <p>Identificación: {artisan.identification}</p>
+                          </div>
                         </div>
                         <div className="flex gap-2">
                           <Button
-                            variant="outline"
                             size="sm"
                             onClick={() => handleEdit(artisan)}
-                            className="text-blue-600 hover:text-blue-700"
+                            className="text-blue-600 bg-white border-1 border-blue-600 hover:text-white hover:bg-blue-600"
                           >
-                            <Edit2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                            <Edit2 className="h-4 w-4" />
                           </Button>
                           <Button
-                            variant="outline"
                             size="sm"
                             onClick={() => handleDelete(artisan.id)}
-                            className="text-red-600 hover:text-red-700"
+                            className="text-red-600 bg-white border-1 border-red-600 hover:text-white hover:bg-red-600"
                           >
-                            <Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />
+                            <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
                       </div>

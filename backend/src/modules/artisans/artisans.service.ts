@@ -16,8 +16,10 @@ export class ArtisanService {
     try {
       return await this.prisma.artisan.create({ data });
     } catch (error) {
-      // Si ocurre un error de restricción única, el filtro global lo manejará,
-      // pero aquí puedes lanzar una excepción más específica si lo deseas.
+      // Manejar error de restricción única para identificación
+      if (error.code === 'P2002' && error.meta?.target?.includes('identification')) {
+        throw new BadRequestException('Ya existe un artesano registrado con ese número de identificación');
+      }
       throw error;
     }
   }
@@ -81,6 +83,9 @@ export class ArtisanService {
     } catch (error) {
       if (error.code === 'P2025') {
         throw new NotFoundException('El artesano no existe');
+      }
+      if (error.code === 'P2002' && error.meta?.target?.includes('identification')) {
+        throw new BadRequestException('Ya existe un artesano registrado con ese número de identificación');
       }
       throw error;
     }

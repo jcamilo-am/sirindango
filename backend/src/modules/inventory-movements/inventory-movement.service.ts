@@ -1,71 +1,13 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateProductInput } from '../products/types/create-product.type';
-import { UpdateProductInput } from '../products/types/update-product.type';
-import { FindAllOptions } from '../products/types/filters.type';
 import { CreateInventoryMovementInput } from './types/create-inventory-movement.type';
 
-@Injectable()
-export class ProductService {
-  constructor(private prisma: PrismaService) {}
-
-  // Crea un producto, el filtro global maneja errores de unicidad
-  async create(data: CreateProductInput) {
-    try {
-      return await this.prisma.product.create({ data });
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  // Busca productos con filtros opcionales
-  async findAll(options: FindAllOptions = {}) {
-    const { eventId, artisanId, order } = options;
-    const where: any = {};
-    if (eventId) where.eventId = eventId;
-    if (artisanId) where.artisanId = artisanId;
-    let orderBy: any = undefined;
-    if (order === 'name') orderBy = { name: 'asc' };
-    if (order === 'quantity') orderBy = { availableQuantity: 'asc' };
-    return await this.prisma.product.findMany({ where, orderBy });
-  }
-
-  // Busca un producto por ID, lanza NotFoundException si no existe
-  async findOne(id: number) {
-    const product = await this.prisma.product.findUnique({ where: { id } });
-    if (!product) throw new NotFoundException('El producto no existe');
-    return product;
-  }
-
-  // Actualiza un producto si no tiene ventas asociadas
-  async update(id: number, data: UpdateProductInput) {
-    // Verifica si el producto tiene ventas asociadas
-    const salesCount = await this.prisma.sale.count({ where: { productId: id } });
-    if (salesCount > 0) {
-      throw new BadRequestException('No se puede actualizar un producto con ventas asociadas.');
-    }
-    try {
-      return await this.prisma.product.update({ where: { id }, data });
-    } catch (error) {
-      // Si no existe, el filtro global lo maneja (P2025)
-      throw error;
-    }
-  }
-
-  // Elimina un producto si no tiene ventas asociadas
-  async remove(id: number) {
-    // Verifica si el producto tiene ventas asociadas
-    const salesCount = await this.prisma.sale.count({ where: { productId: id } });
-    if (salesCount > 0) {
-      throw new BadRequestException('No se puede eliminar un producto con ventas asociadas.');
-    }
-    try {
-      return await this.prisma.product.delete({ where: { id } });
-    } catch (error) {
-      // Si no existe, el filtro global lo maneja (P2025)
-      throw error;
-    }
-  }
+// Tipos para filtros de movimientos de inventario
+interface InventoryMovementFilters {
+  productId?: number;
+  type?: 'ENTRADA' | 'SALIDA';
+  startDate?: string;
+  endDate?: string;
 }
 
 @Injectable()
@@ -74,7 +16,10 @@ export class InventoryMovementService {
 
   async create(data: CreateInventoryMovementInput) {
     // 1. Valida que el producto exista y esté activo
-    const product = await this.prisma.product.findUnique({ where: { id: data.productId }, include: { event: true } });
+    const product = await this.prisma.product.findUnique({ 
+      where: { id: data.productId }, 
+      include: { event: true } 
+    });
     if (!product) throw new NotFoundException('El producto no existe');
 
     // 2. No permitir movimientos para productos de eventos cerrados
@@ -120,8 +65,52 @@ export class InventoryMovementService {
     return await this.prisma.inventoryMovement.create({ data });
   }
 
+  async findAll(filters: InventoryMovementFilters = {}) {
+    const { productId, type, startDate, endDate } = filters;
+    const where: any = {};
+    
+    if (productId) where.productId = productId;
+    if (type) where.type = type;
+    
+    // Filtros de fecha
+    if (startDate || endDate) {
+      where.createdAt = {};
+      if (startDate) where.createdAt.gte = new Date(startDate);
+      if (endDate) where.createdAt.lte = new Date(endDate);
+    }
+
+    return await this.prisma.inventoryMovement.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        product: {
+          select: { id: true, name: true }
+        },
+        sale: {
+          select: { id: true, valueCharged: true }
+        },
+        change: {
+          select: { id: true, valueDifference: true }
+        }
+      }
+    });
+  }
+
   async findOne(id: number) {
-    const movement = await this.prisma.inventoryMovement.findUnique({ where: { id } });
+    const movement = await this.prisma.inventoryMovement.findUnique({ 
+      where: { id },
+      include: {
+        product: {
+          select: { id: true, name: true }
+        },
+        sale: {
+          select: { id: true, valueCharged: true }
+        },
+        change: {
+          select: { id: true, valueDifference: true }
+        }
+      }
+    });
     if (!movement) throw new NotFoundException('Movimiento no encontrado');
     return movement;
   }
