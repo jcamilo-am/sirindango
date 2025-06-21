@@ -13,9 +13,10 @@ export class AuthService {
 
   async validateUser(username: string, password: string) {
     const user = await this.usersService.findByUsername(username);
-    if (!user) throw new UnauthorizedException('Usuario no encontrado');
+    // Unificar mensaje para usuario no encontrado o contraseña incorrecta
+    if (!user) throw new UnauthorizedException('Credenciales inválidas');
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) throw new UnauthorizedException('Contraseña incorrecta');
+    if (!isMatch) throw new UnauthorizedException('Credenciales inválidas');
     // No retornes la contraseña
     const { password: _, ...result } = user;
     return result;
