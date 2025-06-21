@@ -27,7 +27,7 @@ const navMainItems = [
     icon: IconPackage,
   },
   {
-    title: "Artesanas",
+    title: "Artesanos",
     url: "/dashboard/artisans",
     icon: IconUsers,
   },

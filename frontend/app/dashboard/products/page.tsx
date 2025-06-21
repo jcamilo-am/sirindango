@@ -9,22 +9,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { Plus, Edit2, Trash2, Package, Filter, AlertTriangle } from 'lucide-react';
+import { Plus, Edit2, Trash2, Package, Filter, AlertTriangle, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { AppSidebar } from "@/app/dashboard/components/app-sidebar";
 import { SidebarProvider, SidebarInset } from "@/app/dashboard/components/sidebar";
-import type { Product, Event, Artisan } from '@/lib/store';
 import { useProducts } from './hooks/useProducts';
-import { CreateProductSchema } from './models/product';
-import { apiClient } from '@/lib/api';
+import { CreateProductSchema, Product, CreateProduct, UpdateProduct } from './models/product';
 import { useEvents } from '../events/hooks/useEvents';
 import { useArtisans } from '../artisans/hooks/useArtisans';
-import { CreateProduct, UpdateProduct } from './models/product';
 
 export default function RegistrarProductoPage() {
   const {
     products,
-    setProducts,
     fetchProducts,
     createProduct,
     editProduct,
@@ -33,61 +30,125 @@ export default function RegistrarProductoPage() {
     getUniqueCategories,
   } = useProducts();
 
-  const { events } = useEvents();
-  const { artisans } = useArtisans();
+
+
+  const { events, fetchEvents } = useEvents();
+  const { 
+    artisans, 
+    fetchArtisans, 
+    getActiveArtisans, 
+    validateArtisan,
+    getArtisanName 
+  } = useArtisans();
 
   const [selectedEvent, setSelectedEvent] = useState('');
   const [selectedArtisan, setSelectedArtisan] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
   const [editingProduct, setEditingProduct] = useState<string | null>(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
   const [formData, setFormData] = useState({
     name: '',
-    availableQuantity: '',
+    initialQuantity: '',
     category: '',
     price: '',
     eventId: '',
     artisanId: ''
   });
+
   const [searchTerm, setSearchTerm] = useState('');
   const [showLowStock, setShowLowStock] = useState(false);
 
-  // Solo fetch de productos con el hook, eventos y artesanas con fetch propio
+
+  // Cargar datos iniciales
   useEffect(() => {
-    fetchProducts();
-    fetchEvents();
-    fetchArtisans();
-    // eslint-disable-next-line
+    const loadData = async () => {
+      try {
+        await Promise.all([
+          fetchProducts(),
+          fetchEvents(),
+          fetchArtisans()
+        ]);
+      } catch (error) {
+        console.error('Error al cargar datos:', error);
+        toast.error('Error al cargar datos iniciales');
+      }
+    };
+    loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Fetch de eventos y artesanas usando apiClient autenticado
-  const fetchEvents = async () => {
-    try {
-      const res = await apiClient.get('/events');
-      setEvents(res.data);
-    } catch {
-      toast.error('Error al cargar eventos');
+  // Función para extraer mensaje de error del backend
+  const extractErrorMessage = (err: unknown): string => {
+    // Verificar si es un error de axios
+    if (err && typeof err === 'object') {
+      const errorObj = err as Record<string, unknown>;
+      
+      // Caso 1: Error de axios con response
+      if ('response' in errorObj && errorObj.response && typeof errorObj.response === 'object') {
+        const response = errorObj.response as Record<string, unknown>;
+        
+        if ('data' in response && response.data && typeof response.data === 'object') {
+          const data = response.data as Record<string, unknown>;
+          
+          // Priorizar message sobre error
+          if ('message' in data && typeof data.message === 'string') {
+            return data.message;
+          }
+          if ('error' in data && typeof data.error === 'string') {
+            return data.error;
+          }
+        }
+        
+        // Si data es un string directamente
+        if ('data' in response && typeof response.data === 'string') {
+          return response.data;
+        }
+        
+        // Fallback con status
+        const status = 'status' in response ? response.status : 'desconocido';
+        const statusText = 'statusText' in response && typeof response.statusText === 'string' 
+          ? response.statusText 
+          : 'Error del servidor';
+        return `Error ${status}: ${statusText}`;
+      }
+      
+      // Caso 2: Error de red sin response
+      if ('request' in errorObj) {
+        return 'Error de conexión con el servidor';
+      }
+      
+      // Caso 3: Error con message
+      if ('message' in errorObj && typeof errorObj.message === 'string') {
+        return errorObj.message;
+      }
     }
-  };
-  const fetchArtisans = async () => {
-    try {
-      const res = await apiClient.get('/artisans');
-      setArtisans(res.data);
-    } catch {
-      toast.error('Error al cargar artesanas');
+    
+    // Caso 4: Error estándar de JavaScript
+    if (err instanceof Error) {
+      return err.message;
     }
+    
+    return 'Ha ocurrido un error inesperado';
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrors({});
-    const productData = {
+    
+    const productData: CreateProduct = {
       name: formData.name,
       price: Number(formData.price),
-      availableQuantity: Number(formData.availableQuantity),
+      initialQuantity: Number(formData.initialQuantity),
       eventId: Number(formData.eventId),
       artisanId: Number(formData.artisanId),
       category: formData.category,
     };
+
     const result = CreateProductSchema.safeParse(productData);
     if (!result.success) {
       const newErrors: Record<string, string> = {};
@@ -98,31 +159,42 @@ export default function RegistrarProductoPage() {
       toast.error('Por favor corrija los errores en el formulario');
       return;
     }
+
+    // Validar que el artesano esté activo
+    if (!validateArtisan(productData.artisanId)) {
+      setErrors({ artisanId: 'El artesano seleccionado no está activo' });
+      toast.error('El artesano seleccionado no está activo');
+      return;
+    }
+
     try {
       if (editingProduct) {
-        const updated = await editProduct(Number(editingProduct), productData);
-        if (updated) {
-          setProducts(products.map(p => p.id === updated.id ? updated : p));
+        const updateData: UpdateProduct = {
+          name: productData.name,
+          price: productData.price,
+          category: productData.category,
+          eventId: productData.eventId,
+          artisanId: productData.artisanId,
+        };
+        await editProduct(Number(editingProduct), updateData);
           toast.success('Producto actualizado exitosamente');
-        }
       } else {
-        const created = await createProduct(productData);
-        if (created) {
-          setProducts([...products, created]);
+        await createProduct(productData);
           toast.success('Producto registrado exitosamente');
-        }
       }
       resetForm();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Error al guardar producto';
+      const message = extractErrorMessage(err);
       toast.error(message);
     }
   };
 
+
+
   const resetForm = () => {
     setFormData({
       name: '',
-      availableQuantity: '',
+      initialQuantity: '',
       category: '',
       price: '',
       eventId: '',
@@ -130,12 +202,15 @@ export default function RegistrarProductoPage() {
     });
     setEditingProduct(null);
     setIsDialogOpen(false);
+    setErrors({});
   };
+
+
 
   const handleEdit = (product: Product) => {
     setFormData({
       name: product.name,
-      availableQuantity: product.availableQuantity.toString(),
+      initialQuantity: (product.stock || 0).toString(),
       category: product.category || '',
       price: product.price.toString(),
       eventId: product.eventId.toString(),
@@ -146,17 +221,11 @@ export default function RegistrarProductoPage() {
   };
 
   const handleDelete = async (id: number) => {
-    try {
-      const ok = await deleteProduct(id);
-      if (ok) {
-        setProducts(products.filter(p => p.id !== id));
-        toast.success('Producto eliminado exitosamente');
-      }
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Error al eliminar producto';
-      toast.error(message);
-    }
+    setProductToDelete(products.find(p => p.id === id) || null);
+    setIsDeleteDialogOpen(true);
   };
+
+
 
   const filteredProducts = products.filter(product => {
     if (selectedEvent && product.eventId.toString() !== selectedEvent) return false;
@@ -166,18 +235,26 @@ export default function RegistrarProductoPage() {
     return matchesSearch && matchesLowStock;
   });
 
-  const getArtisanName = (artisanId: string) => {
-    return artisans.find(a => a.id.toString() === artisanId)?.name || 'Desconocido';
+  const getEventName = (eventId: number) => {
+    return events.find(e => e.id === eventId)?.name || 'Desconocido';
   };
-  const getEventName = (eventId: string) => {
-    return events.find(e => e.id.toString() === eventId)?.name || 'Desconocido';
-  };
+
   const handleEventFilterChange = (value: string) => {
     setSelectedEvent(value === 'all' ? '' : value);
   };
+
   const handleArtisanFilterChange = (value: string) => {
     setSelectedArtisan(value === 'all' ? '' : value);
   };
+
+  const clearAllFilters = () => {
+    setSelectedEvent('');
+    setSelectedArtisan('');
+    setSearchTerm('');
+    setShowLowStock(false);
+  };
+
+  const hasActiveFilters = selectedEvent || selectedArtisan || searchTerm || showLowStock;
 
   const lowStockProducts = getProductsWithLowStock();
   const categories = getUniqueCategories();
@@ -199,13 +276,23 @@ export default function RegistrarProductoPage() {
                 <h2 className="text-2xl font-bold text-foreground">Gestión de Productos</h2>
                 <p className="text-muted-foreground">Registra y administra los productos para las ferias</p>
               </div>
+              <div className="flex gap-2">
               <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogTrigger asChild>
                   <Button className="bg-orange-500 hover:bg-orange-600 text-white">
-                    <Plus className="h-4 w-4 mr-2 text-primary" />
+                      <Plus className="h-4 w-4 mr-2" />
                     Nuevo Producto
                   </Button>
                 </DialogTrigger>
+                </Dialog>
+              </div>
+            </div>
+
+
+
+            {/* Diálogos */}
+            {/* Diálogo Crear Producto */}
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogContent className="sm:max-w-md">
                   <DialogHeader>
                     <DialogTitle>
@@ -226,20 +313,20 @@ export default function RegistrarProductoPage() {
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <Label htmlFor="quantity" className="mb-2 block">Cantidad *</Label>
+                      <Label htmlFor="quantity" className="mb-2 block">Cantidad Inicial *</Label>
                         <Input
                           id="quantity"
                           type="number"
                           min="1"
-                          value={formData.availableQuantity}
-                          onChange={(e) => setFormData({...formData, availableQuantity: e.target.value})}
+                        value={formData.initialQuantity}
+                        onChange={(e) => setFormData({...formData, initialQuantity: e.target.value})}
                           placeholder="0"
-                          className={`text-base bg-background text-foreground border-border focus:border-primary ${errors.availableQuantity ? 'border-red-500' : ''}`}
+                        className={`text-base bg-background text-foreground border-border focus:border-primary ${errors.initialQuantity ? 'border-red-500' : ''}`}
                         />
-                        {errors.availableQuantity && <p className="text-red-500 text-sm mt-1">{errors.availableQuantity}</p>}
+                      {errors.initialQuantity && <p className="text-red-500 text-sm mt-1">{errors.initialQuantity}</p>}
                       </div>
                       <div>
-                        <Label htmlFor="price" className="mb-2 block">Precio (opcional)</Label>
+                      <Label htmlFor="price" className="mb-2 block">Precio *</Label>
                         <Input
                           id="price"
                           type="number"
@@ -272,10 +359,14 @@ export default function RegistrarProductoPage() {
                     <div>
                       <Label htmlFor="event" className="mb-2 block">Feria *</Label>
                       <Select value={formData.eventId} onValueChange={(value) => setFormData({...formData, eventId: value})}>
-                        <SelectTrigger className={`text-base bg-background text-foreground border-border focus:border-primary ${errors.eventId ? 'border-red-500' : ''}`}>
-                          <SelectValue placeholder="Seleccionar feria" />
+                        <SelectTrigger className={`text-base bg-background text-foreground border-border focus:border-primary max-w-full ${errors.eventId ? 'border-red-500' : ''}`}>
+                          <SelectValue placeholder="Seleccionar feria">
+                            <span className="truncate block">
+                              {formData.eventId ? events.find(e => e.id.toString() === formData.eventId)?.name || 'Seleccionar feria' : 'Seleccionar feria'}
+                            </span>
+                          </SelectValue>
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="max-w-[300px]">
                           {events.map((event) => (
                             <SelectItem key={event.id} value={event.id.toString()}>
                               {event.name}
@@ -288,13 +379,17 @@ export default function RegistrarProductoPage() {
                     <div>
                       <Label htmlFor="artisan" className="mb-2 block">Artesana *</Label>
                       <Select value={formData.artisanId} onValueChange={(value) => setFormData({...formData, artisanId: value})}>
-                        <SelectTrigger className={`text-base bg-background text-foreground border-border focus:border-primary ${errors.artisanId ? 'border-red-500' : ''}`}>
-                          <SelectValue placeholder="Seleccionar artesana" />
+                        <SelectTrigger className={`text-base bg-background text-foreground border-border focus:border-primary max-w-full ${errors.artisanId ? 'border-red-500' : ''}`}>
+                          <SelectValue placeholder="Seleccionar artesana">
+                            <span className="truncate block">
+                              {formData.artisanId ? getActiveArtisans().find(a => a.id.toString() === formData.artisanId)?.name || 'Seleccionar artesana' : 'Seleccionar artesana'}
+                            </span>
+                          </SelectValue>
                         </SelectTrigger>
-                        <SelectContent>
-                          {artisans.map((artisan) => (
+                        <SelectContent className="max-w-[300px]">
+                        {getActiveArtisans().map((artisan) => (
                             <SelectItem key={artisan.id} value={artisan.id.toString()}>
-                              {artisan.name}
+                            {artisan.name} - {artisan.identification}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -312,11 +407,27 @@ export default function RegistrarProductoPage() {
                   </form>
                 </DialogContent>
               </Dialog>
-            </div>
+
             {/* Filters */}
             <Card className="bg-background border border-border">
               <CardHeader>
-                <CardTitle className="text-lg">Filtros</CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Filter className="h-5 w-5" />
+                    Filtros
+                  </CardTitle>
+                  {hasActiveFilters && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={clearAllFilters}
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                    >
+                      <X className="h-4 w-4 mr-1" />
+                      Limpiar Filtros
+                    </Button>
+                  )}
+                </div>
               </CardHeader>
               <CardContent className="bg-background">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -332,10 +443,14 @@ export default function RegistrarProductoPage() {
                   <div>
                     <Label htmlFor="eventFilter" className="mb-2 block">Filtrar por Feria</Label>
                     <Select value={selectedEvent || 'all'} onValueChange={handleEventFilterChange}>
-                      <SelectTrigger className="text-base bg-background text-foreground border-border focus:border-primary">
-                        <SelectValue placeholder="Todas las ferias" />
+                      <SelectTrigger className="text-base bg-background text-foreground border-border focus:border-primary max-w-full">
+                        <SelectValue placeholder="Todas las ferias">
+                          <span className="truncate block">
+                            {selectedEvent ? events.find(e => e.id.toString() === selectedEvent)?.name || 'Todas las ferias' : 'Todas las ferias'}
+                          </span>
+                        </SelectValue>
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="max-w-[300px]">
                         <SelectItem value="all">Todas las ferias</SelectItem>
                         {events.map((event) => (
                           <SelectItem key={event.id} value={event.id.toString()}>
@@ -348,10 +463,14 @@ export default function RegistrarProductoPage() {
                   <div>
                     <Label htmlFor="artisanFilter" className="mb-2 block">Filtrar por Artesana</Label>
                     <Select value={selectedArtisan || 'all'} onValueChange={handleArtisanFilterChange}>
-                      <SelectTrigger className="text-base bg-background text-foreground border-border focus:border-primary">
-                        <SelectValue placeholder="Todas las artesanas" />
+                      <SelectTrigger className="text-base bg-background text-foreground border-border focus:border-primary max-w-full">
+                        <SelectValue placeholder="Todas las artesanas">
+                          <span className="truncate block">
+                            {selectedArtisan ? artisans.find(a => a.id.toString() === selectedArtisan)?.name || 'Todas las artesanas' : 'Todas las artesanas'}
+                          </span>
+                        </SelectValue>
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="max-w-[300px]">
                         <SelectItem value="all">Todas las artesanas</SelectItem>
                         {artisans.map((artisan) => (
                           <SelectItem key={artisan.id} value={artisan.id.toString()}>
@@ -375,26 +494,32 @@ export default function RegistrarProductoPage() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Low Stock Alert */}
+            {lowStockProducts.length > 0 && (
+              <Card className="bg-yellow-50 border-yellow-200 dark:bg-yellow-900/20 dark:border-yellow-800">
+                <CardContent className="ml-2">
+                  <div className="flex items-center gap-2 text-yellow-800 dark:text-yellow-200">
+                    <AlertTriangle className="h-5 w-5" />
+                    <span className="font-medium">
+                      {lowStockProducts.length} productos con stock bajo
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Products List */}
             <div className="grid gap-4">
-              {lowStockProducts.length > 0 && (
-                <Card className="bg-yellow-50 border-yellow-200">
-                  <CardContent className="p-4">
-                    <div className="flex items-center gap-2 text-yellow-800">
-                      <AlertTriangle className="h-5 w-5" />
-                      <span className="font-medium">
-                        {lowStockProducts.length} productos con stock bajo (≤5 unidades)
-                      </span>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
               {filteredProducts.length === 0 ? (
                 <Card>
                   <CardContent className="flex flex-col items-center justify-center py-12">
                     <Package className="h-12 w-12 text-gray-400 mb-4" />
                     <p className="text-gray-500 text-center">
-                      No hay productos registrados con los filtros seleccionados
+                      {products.length === 0 
+                        ? "No hay productos registrados"
+                        : "No hay productos que coincidan con los filtros seleccionados"
+                      }
                     </p>
                   </CardContent>
                 </Card>
@@ -404,41 +529,50 @@ export default function RegistrarProductoPage() {
                     <CardContent className="p-6 bg-background">
                       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                         <div className="flex-1">
-                          <h3 className="font-semibold text-lg text-foreground mb-2">
+                          <h3 className="font-bold text-2xl text-foreground mb-2">
                             {product.name}
                           </h3>
                           <div className="flex flex-wrap gap-2 mb-2">
                             <Badge variant="secondary" className="text-primary bg-primary/10">
                               {product.category}
                             </Badge>
-                            <Badge variant="outline" className="text-primary bg-primary/10">
-                              Cantidad: {product.availableQuantity}
+                            <Badge 
+                              variant={
+                                ((product.stock || 0) <= 3) ? "destructive" : 
+                                ((product.stock || 0) > 3 && (product.stock || 0) < 7) ? "outline" : 
+                                "secondary"
+                              }
+                              className={
+                                ((product.stock || 0) <= 3) ? "" : 
+                                ((product.stock || 0) > 3 && (product.stock || 0) < 7) ? "text-yellow-700 bg-yellow-100 border-yellow-300" : 
+                                "text-green-700 bg-green-100 border-green-300"
+                              }
+                            >
+                              Stock: {product.stock || 0}
                             </Badge>
                             <Badge variant="outline" className="text-primary bg-primary/10">
                               ${product.price.toLocaleString()}
                             </Badge>
                           </div>
                           <div className="text-sm text-muted-foreground">
-                            <p>Feria: {getEventName(product.eventId.toString())}</p>
-                            <p>Artesana: {getArtisanName(product.artisanId.toString())}</p>
+                            <p>Evento: {getEventName(product.eventId)}</p>
+                            <p>Artesano: {getArtisanName(product.artisanId)}</p>
                           </div>
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 flex-wrap">
                           <Button
-                            variant="outline"
                             size="sm"
                             onClick={() => handleEdit(product)}
-                            className="text-blue-600 hover:text-blue-700"
+                            className="text-blue-600 border-1 border-blue-600 hover:text-white hover:bg-blue-600"
                           >
-                            <Edit2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                            <Edit2 className="h-4 w-4" />
                           </Button>
                           <Button
-                            variant="outline"
                             size="sm"
                             onClick={() => handleDelete(product.id)}
-                            className="text-red-600 hover:text-red-700"
+                            className="text-red-600 bg-white border-1 border-red-600 hover:text-white hover:bg-red-600"
                           >
-                            <Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />
+                            <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
                       </div>
@@ -450,6 +584,39 @@ export default function RegistrarProductoPage() {
           </div>
         </div>
       </SidebarInset>
+              <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>¿Estás seguro de que quieres eliminar este producto?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Esta acción no se puede deshacer. Si el producto tiene movimientos de inventario, no podrá ser eliminado.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction 
+                className="bg-red-600 hover:bg-red-700"
+                onClick={async () => {
+                  if (productToDelete) {
+                    try {
+                      await deleteProduct(productToDelete.id);
+                      toast.success('Producto eliminado exitosamente');
+                      setIsDeleteDialogOpen(false);
+                      setProductToDelete(null);
+                    } catch (err: unknown) {
+                      const message = extractErrorMessage(err);
+                      toast.error(message);
+                      setIsDeleteDialogOpen(false);
+                      setProductToDelete(null);
+                    }
+                  }
+                }}
+              >
+                Eliminar
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
     </SidebarProvider>
   );
 }

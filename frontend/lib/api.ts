@@ -27,6 +27,11 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
+    // Log para debug (remover en producción)
+    console.log('Interceptor - Error completo:', error);
+    console.log('Interceptor - Error response:', error.response);
+    console.log('Interceptor - Error response data:', error.response?.data);
+    
     if (error.response?.status === 401) {
       // Token expirado o inválido, limpiar y redirigir al login
       AuthService.logout();

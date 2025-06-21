@@ -228,7 +228,7 @@ export function LoginForm({
                   Iniciando sesión...
                 </div>
               ) : (
-                'Login'
+                'Ingresar'
               )}
             </Button>
           </form>

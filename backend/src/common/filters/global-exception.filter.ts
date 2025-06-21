@@ -33,8 +33,9 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       if (typeof res === 'string') {
         message = res;
       } else if (typeof res === 'object' && res !== null) {
-        message = (res as any).message || message;
-        details = (res as any).details || [];
+        const responseObj = res as { message?: string; details?: any[] };
+        message = responseObj.message || message;
+        details = responseObj.details || [];
       }
     }
 
@@ -53,7 +54,17 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       switch (exception.code) {
         case 'P2002':
           status = HttpStatus.CONFLICT;
-          message = 'Ya existe un registro con ese dato único';
+          // Verificar si es error de identificación duplicada
+          if (
+            exception.meta?.target &&
+            Array.isArray(exception.meta.target) &&
+            exception.meta.target.includes('identification')
+          ) {
+            message =
+              'Ya existe un artesano registrado con ese número de identificación';
+          } else {
+            message = 'Ya existe un registro con ese dato único';
+          }
           break;
         case 'P2025':
           status = HttpStatus.NOT_FOUND;
