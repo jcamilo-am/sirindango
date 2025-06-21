@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateInventoryMovementInput } from './types/create-inventory-movement.type';
+import { getEventStatus } from '../events/utils/event-status.util';
 
 // Tipos para filtros de movimientos de inventario
 interface InventoryMovementFilters {
@@ -22,9 +23,10 @@ export class InventoryMovementService {
     });
     if (!product) throw new NotFoundException('El producto no existe');
 
-    // 2. No permitir movimientos para productos de eventos cerrados
-    if (product.event && product.event.state === 'CLOSED') {
-      throw new BadRequestException('No se pueden registrar movimientos para productos de eventos cerrados');
+    // Usa el estado calculado
+    const status = getEventStatus(product.event);
+    if (status !== 'SCHEDULED') {
+      throw new BadRequestException('No se pueden registrar movimientos para productos de eventos activos o cerrados');
     }
 
     // 3. Si es SALIDA, valida stock suficiente

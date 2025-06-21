@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProductChangeInput } from './types/create-product-change.type';
+import { getEventStatus } from '../events/utils/event-status.util';
 
 @Injectable()
 export class ProductChangeService {
@@ -15,9 +16,10 @@ export class ProductChangeService {
     if (!sale) throw new NotFoundException('Venta no encontrada');
     if (sale.state !== 'ACTIVE') throw new BadRequestException('La venta ya fue cambiada');
 
-    // Refuerzo: No permitir cambios en eventos cerrados
-    if (sale.event.state === 'CLOSED') {
-      throw new BadRequestException('No se puede cambiar una venta de un evento cerrado');
+    // Validar estado del evento
+    const status = getEventStatus(sale.event);
+    if (status !== 'ACTIVE') {
+      throw new BadRequestException('Solo puedes registrar cambios de producto cuando el evento está en curso.');
     }
 
     const productReturned = await this.prisma.product.findUnique({ where: { id: data.productReturnedId } });

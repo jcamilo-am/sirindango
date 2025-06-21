@@ -133,6 +133,7 @@ enum MovementType {
 }
 
 enum EventState {
+  SCHEDULED
   ACTIVE
   CLOSED
 }

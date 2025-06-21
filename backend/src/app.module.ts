@@ -12,6 +12,7 @@ import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { ProductChangeModule } from './modules/poduct-changes/product-change.module';
 import { PdfMakeService } from './common/pdf/pdfmake.service';
+import { InventoryMovementModule } from './modules/inventory-movements/inventory-movement.module';
 
 @Module({
   imports: [
@@ -26,7 +27,8 @@ import { PdfMakeService } from './common/pdf/pdfmake.service';
     SaleModule,
     UsersModule,
     AuthModule,
-    ProductChangeModule
+    ProductChangeModule,
+    InventoryMovementModule
   ],
   controllers: [],
   providers: [

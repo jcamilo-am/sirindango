@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateProductInput } from './types/create-product.type';
 import { UpdateProductInput } from './types/update-product.type';
 import { FindAllOptions } from './types/filters.type';
+import { getEventStatus } from '../events/utils/event-status.util';
 
 @Injectable()
 export class ProductService {
@@ -23,6 +24,8 @@ export class ProductService {
 
   // Crea un producto y su movimiento de inventario inicial
   async create(data: CreateProductInput) {
+    await this.validateEventEditable(data.eventId);
+
     // Valida evento y artesano
     await this.validateEvent({ eventId: data.eventId });
     const artisan = await this.prisma.artisan.findUnique({ where: { id: data.artisanId } });
@@ -72,11 +75,19 @@ export class ProductService {
     const where: any = {};
     if (eventId) where.eventId = eventId;
     if (artisanId) where.artisanId = artisanId;
+
+    // Solo incluir productos de eventos no cerrados
+    where.event = { state: { not: 'CLOSED' } };
+
     let orderBy: any = undefined;
     if (order === 'name') orderBy = { name: 'asc' };
-    // No ordenes por stock, ya que es calculado dinámicamente
 
-    const products = await this.prisma.product.findMany({ where, orderBy });
+    const products = await this.prisma.product.findMany({
+      where,
+      orderBy,
+      include: { event: true }
+    });
+
     // Agrega el stock calculado a cada producto
     return Promise.all(products.map(async (product) => ({
       ...product,
@@ -94,19 +105,12 @@ export class ProductService {
 
   // Actualiza un producto y su movimiento de inventario inicial
   async update(id: number, data: UpdateProductInput) {
-    // Verifica si el producto tiene movimientos de inventario
-    const movementsCount = await this.prisma.inventoryMovement.count({ where: { productId: id } });
-    if (movementsCount > 0) {
-      // No permitir cambiar artesano, evento ni precio si ya hay movimientos
-      if (data.artisanId !== undefined || data.eventId !== undefined || data.price !== undefined) {
-        throw new BadRequestException('No se puede cambiar artesano, evento ni precio de un producto con movimientos de inventario.');
-      }
-    }
+    const product = await this.prisma.product.findUnique({ where: { id } });
+    if (!product) throw new NotFoundException('El producto no existe');
+    await this.validateEventEditable(data.eventId ?? product.eventId);
 
     // Valida unicidad de nombre por artesano y evento si cambia el nombre
     if (data.name) {
-      const product = await this.prisma.product.findUnique({ where: { id } });
-      if (!product) throw new NotFoundException('El producto no existe');
       const exists = await this.prisma.product.findFirst({
         where: {
           name: data.name,
@@ -127,7 +131,9 @@ export class ProductService {
     }
 
     try {
-      return await this.prisma.product.update({ where: { id }, data });
+      const updatedProduct = await this.prisma.product.update({ where: { id }, data });
+      const stock = await this.getCurrentStock(id);
+      return { ...updatedProduct, stock };
     } catch (error) {
       throw error;
     }
@@ -135,6 +141,10 @@ export class ProductService {
 
   // Elimina un producto solo si no tiene movimientos de inventario
   async remove(id: number) {
+    const product = await this.prisma.product.findUnique({ where: { id } });
+    if (!product) throw new NotFoundException('El producto no existe');
+    await this.validateEventEditable(product.eventId);
+
     const movementsCount = await this.prisma.inventoryMovement.count({ where: { productId: id } });
     if (movementsCount > 0) {
       throw new BadRequestException('No se puede eliminar un producto con movimientos de inventario.');
@@ -146,10 +156,21 @@ export class ProductService {
     }
   }
 
+  // Valida que el evento esté en estado 'SCHEDULED' para permitir ediciones
+  async validateEventEditable(eventId: number) {
+    const event = await this.prisma.event.findUnique({ where: { id: eventId } });
+    if (!event) throw new NotFoundException('El evento no existe');
+    const status = getEventStatus(event);
+    if (status !== 'SCHEDULED') {
+      throw new BadRequestException('Solo puedes modificar productos antes de que el evento inicie.');
+    }
+  }
+
   // Ejemplo en ProductService y SaleService
   async validateEvent(data: any) {
     const event = await this.prisma.event.findUnique({ where: { id: data.eventId } });
     if (!event) throw new NotFoundException('El evento no existe');
-    if (event.state !== 'ACTIVE') throw new BadRequestException('No se pueden registrar productos/ventas en un evento cerrado');
+    const status = getEventStatus(event);
+    if (status !== 'ACTIVE') throw new BadRequestException('No se pueden registrar productos/ventas en un evento cerrado o no iniciado');
   }
 }
