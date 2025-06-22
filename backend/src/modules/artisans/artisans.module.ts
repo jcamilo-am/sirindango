@@ -3,7 +3,7 @@ import { ArtisanService } from './artisans.service';
 import { ArtisanController } from './artisans.controller';
 
 @Module({
-    providers: [ArtisanService],
-    controllers: [ArtisanController]
+  providers: [ArtisanService],
+  controllers: [ArtisanController],
 })
 export class ArtisanModule {}

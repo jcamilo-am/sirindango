@@ -28,7 +28,10 @@ export class EventArtisanSaleDetailDto {
   @ApiProperty({ example: 'VENTA', enum: ['VENTA', 'CAMBIO'] })
   type: 'VENTA' | 'CAMBIO';
 
-  @ApiPropertyOptional({ example: 0, description: 'Excedente pagado en el cambio (solo para cambios)' })
+  @ApiPropertyOptional({
+    example: 0,
+    description: 'Excedente pagado en el cambio (solo para cambios)',
+  })
   valueDifference?: number;
 
   @ApiProperty()

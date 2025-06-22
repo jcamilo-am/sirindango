@@ -8,10 +8,16 @@ export class ProductSummarySwaggerDto {
   @ApiProperty({ example: 'Collar artesanal' })
   name: string;
 
-  @ApiPropertyOptional({ example: 5, description: 'Solo para productos no vendidos' })
+  @ApiPropertyOptional({
+    example: 5,
+    description: 'Solo para productos no vendidos',
+  })
   availableQuantity?: number;
 
-  @ApiPropertyOptional({ example: 10, description: 'Solo para resumen general de productos' })
+  @ApiPropertyOptional({
+    example: 10,
+    description: 'Solo para resumen general de productos',
+  })
   quantitySold?: number;
 }
 
@@ -89,10 +95,16 @@ export class EventSummaryDto {
   @ApiProperty({ type: PaymentTotalsDto })
   paymentTotals: PaymentTotalsDto;
 
-  @ApiProperty({ example: 2300, description: 'Total comisión para la asociación' })
+  @ApiProperty({
+    example: 2300,
+    description: 'Total comisión para la asociación',
+  })
   associationCommission: number;
 
-  @ApiProperty({ example: 1150, description: 'Total comisión para el vendedor' })
+  @ApiProperty({
+    example: 1150,
+    description: 'Total comisión para el vendedor',
+  })
   sellerCommission: number;
 
   @ApiProperty({ example: 19550, description: 'Total neto para artesanos' })
@@ -104,6 +116,9 @@ export class EventSummaryDto {
   @ApiProperty({ type: TopArtisanDto, nullable: true })
   topArtisan: TopArtisanDto | null;
 
-  @ApiProperty({ example: 400, description: 'Total descontado por datafono en ventas con tarjeta' })
+  @ApiProperty({
+    example: 400,
+    description: 'Total descontado por datafono en ventas con tarjeta',
+  })
   cardFeesTotal: number;
 }

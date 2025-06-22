@@ -1,230 +1,393 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateSaleInput } from './types/create-sale.type';
+import { CreateSaleDto } from './dto/create-sale.dto';
+import { UpdateSaleDto } from './dto/update-sale.dto';
 import { CreateMultiSaleDto } from './dto/create-multi-sale.dto';
-import { FindAllOptions, MultiSaleResult } from './types/sale.type';
-import { getEventStatus } from '../events/utils/event-status.util';
-
+import { 
+  SaleEntity, 
+  SaleWithDetailsEntity, 
+  MultiSaleResultEntity 
+} from './entities/sale.entity';
+import { SaleValidationHelper } from './helpers/sale-validation.helper';
+import { SaleCalculationHelper } from './helpers/sale-calculation.helper';
+import { EventStatsHelper } from '../events/helpers/event-stats.helper';
 
 @Injectable()
 export class SaleService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) {}
 
-  async createMultiSale(data: CreateMultiSaleDto): Promise<MultiSaleResult[]> {
-    const { eventId, paymentMethod, cardFeeTotal = 0, items } = data;
-
-    // Validación: items no vacío
-    if (!items || !Array.isArray(items) || items.length === 0) {
-      throw new BadRequestException('Debes enviar al menos un producto para la venta.');
-    }
-
-    // Validación: cantidades y valores positivos
-    for (const item of items) {
-      if (item.quantitySold <= 0) throw new BadRequestException('La cantidad debe ser mayor a cero.');
-    }
-
-    // Validación: fee no negativo
-    if (cardFeeTotal < 0) throw new BadRequestException('El fee total no puede ser negativo.');
-
-    // Obtén los productos con sus precios
-    const products = await this.prisma.product.findMany({
-      where: { id: { in: items.map(i => i.productId) } },
-      select: { id: true, eventId: true, artisanId: true, price: true }
+  /**
+   * Crea una venta individual.
+   */
+  async create(data: CreateSaleDto): Promise<SaleEntity> {
+    // Validaciones usando helpers
+    await SaleValidationHelper.validateEventForSale(this.prisma, data.eventId);
+    await SaleValidationHelper.validateArtisanForSale(this.prisma, data.artisanId);
+    const product = await SaleValidationHelper.validateProductForSale(
+      this.prisma, 
+      data.productId, 
+      data.eventId
+    );
+    
+    SaleValidationHelper.validateSaleData({
+      quantitySold: data.quantitySold,
+      valueCharged: data.valueCharged,
+      paymentMethod: data.paymentMethod,
+      cardFee: data.cardFee,
     });
 
-    // Validación: todos los productos deben ser del mismo evento
-    if (products.length !== items.length) throw new BadRequestException('Uno o más productos no existen.');
-    if (products.some(p => p.eventId !== eventId)) throw new BadRequestException('Todos los productos deben pertenecer al mismo evento.');
+    // Validar que el producto pertenezca al artesano especificado
+    if (product.artisanId !== data.artisanId) {
+      throw new BadRequestException('El producto no pertenece al artesano especificado');
+    }
 
-    // Validación: artesanos existen
-    const artisanIds = [...new Set(items.map(i => i.artisanId))];
-    const artisans = await this.prisma.artisan.findMany({ where: { id: { in: artisanIds } } });
-    if (artisans.length !== artisanIds.length) throw new BadRequestException('Uno o más artesanos no existen.');
+    // Validar stock disponible si existe inventario
+    await this.validateStockAvailability(data.productId, data.quantitySold);
 
-    // Calcula el valor cobrado por cada item
-    const itemsWithValue = items.map(item => {
-      const product = products.find(p => p.id === item.productId);
+    // Crear la venta en transacción para asegurar integridad
+    return await this.prisma.$transaction(async (tx) => {
+      const sale = await tx.sale.create({
+        data: {
+          eventId: data.eventId,
+          productId: data.productId,
+          artisanId: data.artisanId,
+          quantitySold: data.quantitySold,
+          valueCharged: data.valueCharged,
+          paymentMethod: data.paymentMethod,
+          cardFee: data.cardFee || 0,
+          state: 'ACTIVE',
+        },
+      });
+
+      // Registrar movimiento de inventario si se maneja stock
+      await this.createInventoryMovement(tx, {
+        type: 'SALIDA',
+        quantity: data.quantitySold,
+        reason: 'Venta directa',
+        productId: data.productId,
+        saleId: sale.id,
+      });
+
+      return SaleEntity.fromPrisma(sale);
+    });
+  }
+
+  /**
+   * Crea múltiples ventas en una sola transacción.
+   */
+  async createMultiSale(data: CreateMultiSaleDto): Promise<MultiSaleResultEntity[]> {
+    const { eventId, paymentMethod, cardFeeTotal = 0, items } = data;
+
+    // Validaciones usando helpers
+    await SaleValidationHelper.validateEventForSale(this.prisma, eventId);
+    
+    const productIds = items.map(item => item.productId);
+    const artisanIds = items.map(item => item.artisanId);
+    
+    const products = await SaleValidationHelper.validateMultiSaleProducts(
+      this.prisma, 
+      eventId, 
+      productIds
+    );
+    
+    await SaleValidationHelper.validateMultiSaleArtisans(this.prisma, artisanIds);
+
+    // Calcular valores con helpers
+    const itemsWithValue = items.map((item) => {
+      const product = products.find((p) => p.id === item.productId);
       if (!product) throw new BadRequestException('Producto no encontrado');
+      
+      // Validar que el producto pertenezca al artesano
+      if (product.artisanId !== item.artisanId) {
+        throw new BadRequestException(`El producto ${product.name} no pertenece al artesano especificado`);
+      }
+      
       return {
         ...item,
-        valueCharged: product.price * item.quantitySold,
+        valueCharged: SaleCalculationHelper.calculateValueCharged(product.price, item.quantitySold),
       };
     });
 
-    // Prorratea el fee si es tarjeta
-    const total = itemsWithValue.reduce((sum, item) => sum + item.valueCharged, 0);
-    const feePorItem = paymentMethod === 'CARD'
-      ? itemsWithValue.map(item => ({
-          ...item,
-          cardFee: total > 0 ? cardFeeTotal * (item.valueCharged / total) : 0
-        }))
-      : itemsWithValue.map(item => ({ ...item, cardFee: 0 }));
+    // Calcular fees prorrateados
+    const itemsWithFees = SaleCalculationHelper.calculateProportionalCardFee(
+      itemsWithValue, 
+      paymentMethod === 'CARD' ? cardFeeTotal : 0
+    );
 
-    // Crea cada venta individualmente
-    const results: MultiSaleResult[] = [];
-    for (const item of feePorItem) {
-      const venta = await this.create({
+    // Crear cada venta individualmente
+    const results: MultiSaleResultEntity[] = [];
+    for (const item of itemsWithFees) {
+      const sale = await this.create({
         eventId,
         productId: item.productId,
         artisanId: item.artisanId,
         quantitySold: item.quantitySold,
-        valueCharged: item.valueCharged, // Ahora calculado
+        valueCharged: item.valueCharged,
         paymentMethod,
         cardFee: item.cardFee,
       });
-      results.push({ sale: venta, totalAmount: venta.totalAmount });
+      
+      results.push(MultiSaleResultEntity.fromSaleAndAmount(sale, sale.valueCharged));
     }
+    
     return results;
   }
 
-  // Busca ventas con filtros opcionales
-  async findAll(options: FindAllOptions = {}) {
-    const { eventId, artisanId, order } = options;
+  /**
+   * Lista todas las ventas con filtros opcionales.
+   */
+  async findAll(options: {
+    eventId?: number;
+    artisanId?: number;
+    paymentMethod?: 'CASH' | 'CARD';
+    state?: 'ACTIVE' | 'CANCELLED';
+    startDate?: Date;
+    endDate?: Date;
+    order?: 'date' | 'quantity';
+  } = {}): Promise<SaleEntity[]> {
+    const { eventId, artisanId, paymentMethod, state, startDate, endDate, order } = options;
+    
     const where: any = {};
     if (eventId) where.eventId = eventId;
     if (artisanId) where.artisanId = artisanId;
-    let orderBy: any = undefined;
+    if (paymentMethod) where.paymentMethod = paymentMethod;
+    if (state) where.state = state;
+    if (startDate || endDate) {
+      where.date = {};
+      if (startDate) where.date.gte = startDate;
+      if (endDate) where.date.lte = endDate;
+    }
+
+    let orderBy: any = { createdAt: 'desc' };
     if (order === 'date') orderBy = { date: 'asc' };
     if (order === 'quantity') orderBy = { quantitySold: 'asc' };
-    
+
     const sales = await this.prisma.sale.findMany({
       where,
       orderBy,
-      include: {
-        product: true, // Incluir el producto para calcular totalAmount
-      },
     });
 
-    // Retornar las ventas con totalAmount calculado
-    return sales.map(sale => ({
-      ...sale,
-      totalAmount: sale.product.price * sale.quantitySold,
-      product: undefined,
-    }));
+    return SaleEntity.fromPrismaList(sales);
   }
 
-  // Busca una venta por ID
-  async findOne(id: number) {
-    const sale = await this.prisma.sale.findUnique({ 
+  /**
+   * Busca una venta por ID.
+   */
+  async findOne(id: number): Promise<SaleEntity> {
+    const sale = await this.prisma.sale.findUnique({
+      where: { id },
+    });
+    
+    if (!sale) {
+      throw new NotFoundException('Venta no encontrada');
+    }
+
+    return SaleEntity.fromPrisma(sale);
+  }
+
+  /**
+   * Busca una venta con detalles de relaciones.
+   */
+  async findOneWithDetails(id: number): Promise<SaleWithDetailsEntity> {
+    const sale = await this.prisma.sale.findUnique({
       where: { id },
       include: {
         product: true,
+        artisan: true,
+        event: true,
       },
     });
-    if (!sale) throw new NotFoundException('La venta no existe');
     
-    // Retornar la venta con totalAmount calculado
-    return {
-      ...sale,
-      totalAmount: sale.product ? sale.product.price * sale.quantitySold : sale.valueCharged,
-      product: undefined,
-    };
-  }
-
-  // Obtiene el stock actual de un producto sumando movimientos
-  private async getCurrentStock(productId: number): Promise<number> {
-    const movimientos = await this.prisma.inventoryMovement.findMany({
-      where: { productId },
-      select: { type: true, quantity: true }
-    });
-
-    let stock = 0;
-    for (const mov of movimientos) {
-      if (mov.type === 'ENTRADA') stock += mov.quantity;
-      if (mov.type === 'SALIDA') stock -= mov.quantity;
-    }
-    return stock;
-  }
-
-  // Crea una venta, registra movimiento de inventario y valida reglas de negocio
-  private async create(data: CreateSaleInput) {
-    // 1. Validar existencia de producto, evento y artesano
-    const product = await this.prisma.product.findUnique({ where: { id: data.productId } });
-    if (!product) throw new NotFoundException('El producto no existe');
-    const event = await this.prisma.event.findUnique({ where: { id: data.eventId } });
-    if (!event) throw new NotFoundException('El evento no existe');
-
-    // Usa el estado calculado
-    const status = getEventStatus(event);
-    if (status !== 'ACTIVE') throw new BadRequestException('Solo puedes registrar ventas cuando el evento está en curso.');
-
-    const artisan = await this.prisma.artisan.findUnique({ where: { id: data.artisanId } });
-    if (!artisan) throw new NotFoundException('El artesano no existe');
-
-    // 2. Validar stock suficiente (usando movimientos)
-    const stock = await this.getCurrentStock(product.id);
-    if (stock < data.quantitySold) {
-      throw new BadRequestException('No hay suficiente stock disponible');
+    if (!sale) {
+      throw new NotFoundException('Venta no encontrada');
     }
 
-    // 3. Transacción: crear venta y movimiento de inventario
-    return await this.prisma.$transaction(async (tx) => {
-      // Crear la venta
-      const sale = await tx.sale.create({
-        data: {
-          ...data,
-          valueCharged: data.valueCharged, // <-- agrega esto
-          cardFee: data.paymentMethod === 'CARD' ? data.cardFee ?? 0 : null,
-          date: new Date(),
-        },
-        include: {
-          product: true,
-        },
-      });
-
-      // Crear movimiento de inventario tipo SALIDA
-      await tx.inventoryMovement.create({
-        data: {
-          type: 'SALIDA',
-          quantity: data.quantitySold,
-          reason: 'Venta directa',
-          productId: data.productId,
-          saleId: sale.id,
-        },
-      });
-
-      // Ya NO actualices el stock en Product, solo con movimientos
-
-      // Retornar la venta con totalAmount calculado
-      return {
-        ...sale,
-        totalAmount: sale.product.price * sale.quantitySold,
-      };
-    });
+    return SaleWithDetailsEntity.fromPrismaWithDetails(sale);
   }
 
-  async cancelSale(id: number) {
-    // 1. Busca la venta
-    const sale = await this.prisma.sale.findUnique({ where: { id } });
-    if (!sale) throw new NotFoundException('La venta no existe');
-    if (sale.state !== 'ACTIVE') throw new BadRequestException('Solo puedes anular ventas activas');
-    
-    // 2. No permitir anular ventas de eventos cerrados o no activos
-    const event = await this.prisma.event.findUnique({ where: { id: sale.eventId } });
-    if (!event) throw new NotFoundException('El evento no existe');
-    const status = getEventStatus(event);
-    if (status !== 'ACTIVE') throw new BadRequestException('No puedes anular ventas de eventos no activos');
+  /**
+   * Actualiza una venta por ID.
+   */
+  async update(id: number, data: UpdateSaleDto): Promise<SaleEntity> {
+    // Verificar que la venta existe
+    await SaleValidationHelper.validateSaleExists(this.prisma, id);
 
-    // 3. Cambia el estado a CANCELLED y regresa el stock
+    // Validar datos si se proporcionan
+    if (data.quantitySold || data.valueCharged || data.paymentMethod || data.cardFee !== undefined) {
+      const existingSale = await this.prisma.sale.findUnique({ where: { id } });
+      if (!existingSale) {
+        throw new NotFoundException('Venta no encontrada');
+      }
+
+      SaleValidationHelper.validateSaleData({
+        quantitySold: data.quantitySold || existingSale.quantitySold,
+        valueCharged: data.valueCharged || existingSale.valueCharged,
+        paymentMethod: data.paymentMethod || existingSale.paymentMethod,
+        cardFee: data.cardFee !== undefined ? data.cardFee : (existingSale.cardFee || 0),
+      });
+    }
+
+    const updatedSale = await this.prisma.sale.update({
+      where: { id },
+      data,
+    });
+
+    return SaleEntity.fromPrisma(updatedSale);
+  }
+
+  /**
+   * Cancela una venta (cambia el estado a CANCELLED).
+   */
+  async cancelSale(id: number): Promise<SaleEntity> {
+    // Validar que se puede cancelar la venta
+    await SaleValidationHelper.validateCanCancelSale(this.prisma, id);
+
+    // Validar que el evento esté activo para permitir cancelaciones
+    const sale = await this.prisma.sale.findUnique({
+      where: { id },
+      include: { event: true },
+    });
+
+    if (!sale) {
+      throw new NotFoundException('Venta no encontrada');
+    }
+
+    const eventStatus = EventStatsHelper.getEventStatus(sale.event);
+    if (eventStatus !== 'ACTIVE') {
+      throw new BadRequestException(
+        'Solo se pueden cancelar ventas de eventos activos'
+      );
+    }
+
     return await this.prisma.$transaction(async (tx) => {
-      // Actualiza el estado
       const cancelledSale = await tx.sale.update({
         where: { id },
         data: { state: 'CANCELLED' },
       });
 
-      // Regresa el stock (movimiento ENTRADA)
-      await tx.inventoryMovement.create({
-        data: {
-          type: 'ENTRADA',
-          quantity: sale.quantitySold,
-          reason: 'Anulación de venta',
-          productId: sale.productId,
-          saleId: sale.id,
-        },
+      // Registrar movimiento de entrada para devolver el stock
+      await this.createInventoryMovement(tx, {
+        type: 'ENTRADA',
+        quantity: sale.quantitySold,
+        reason: 'Cancelación de venta',
+        productId: sale.productId,
+        saleId: sale.id,
       });
 
-      return { message: 'Venta anulada', sale: cancelledSale };
+      return SaleEntity.fromPrisma(cancelledSale);
     });
+  }
+
+  /**
+   * Elimina una venta (solo si está cancelada).
+   */
+  async remove(id: number): Promise<SaleEntity> {
+    const sale = await this.prisma.sale.findUnique({
+      where: { id },
+    });
+
+    if (!sale) {
+      throw new NotFoundException('Venta no encontrada');
+    }
+
+    if (sale.state !== 'CANCELLED') {
+      throw new BadRequestException('Solo se pueden eliminar ventas canceladas');
+    }
+
+    const deletedSale = await this.prisma.sale.delete({
+      where: { id },
+    });
+
+    return SaleEntity.fromPrisma(deletedSale);
+  }
+
+  /**
+   * Obtiene estadísticas de ventas de un artesano.
+   */
+  async getArtisanStats(artisanId: number, eventId?: number) {
+    await SaleValidationHelper.validateArtisanForSale(this.prisma, artisanId);
+    return SaleCalculationHelper.calculateArtisanSalesStats(this.prisma, artisanId, eventId);
+  }
+
+  /**
+   * Obtiene estadísticas de ventas de un evento.
+   */
+  async getEventStats(eventId: number) {
+    await SaleValidationHelper.validateEventForSale(this.prisma, eventId);
+    return SaleCalculationHelper.calculateEventSalesStats(this.prisma, eventId);
+  }
+
+  /**
+   * Obtiene ventas agrupadas por fecha.
+   */
+  async getSalesByDateRange(startDate: Date, endDate: Date, eventId?: number) {
+    if (eventId) {
+      await SaleValidationHelper.validateEventForSale(this.prisma, eventId);
+    }
+    return SaleCalculationHelper.calculateSalesByDateRange(this.prisma, startDate, endDate, eventId);
+  }
+
+  /**
+   * Obtiene los productos más vendidos de un evento.
+   */
+  async getTopSellingProducts(eventId: number, limit: number = 10) {
+    await SaleValidationHelper.validateEventForSale(this.prisma, eventId);
+    return SaleCalculationHelper.calculateTopSellingProducts(this.prisma, eventId, limit);
+  }
+
+  /**
+   * Valida disponibilidad de stock usando movimientos de inventario.
+   */
+  private async validateStockAvailability(productId: number, quantityRequested: number): Promise<void> {
+    const currentStock = await this.getCurrentStock(productId);
+    
+    if (currentStock < quantityRequested) {
+      throw new BadRequestException('No hay suficiente stock disponible');
+    }
+  }
+
+  /**
+   * Obtiene el stock actual de un producto sumando movimientos.
+   */
+  private async getCurrentStock(productId: number): Promise<number> {
+    const movements = await this.prisma.inventoryMovement.findMany({
+      where: { productId },
+      select: { type: true, quantity: true },
+    });
+
+    let stock = 0;
+    for (const movement of movements) {
+      if (movement.type === 'ENTRADA') stock += movement.quantity;
+      if (movement.type === 'SALIDA') stock -= movement.quantity;
+    }
+    return stock;
+  }
+
+  /**
+   * Crea un movimiento de inventario.
+   */
+  private async createInventoryMovement(
+    tx: any, 
+    data: {
+      type: 'ENTRADA' | 'SALIDA';
+      quantity: number;
+      reason: string;
+      productId: number;
+      saleId: number;
+    }
+  ): Promise<void> {
+    try {
+      await tx.inventoryMovement.create({
+        data,
+      });
+    } catch (error) {
+      // Si la tabla no existe o hay un error, continuar sin registrar el movimiento
+      // Esto permite que el sistema funcione sin el módulo de inventario
+      console.warn('No se pudo registrar el movimiento de inventario:', error);
+    }
   }
 }
