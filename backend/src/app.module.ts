@@ -10,15 +10,15 @@ import { ProductModule } from './modules/products/products.module';
 import { SaleModule } from './modules/sales/sales.module';
 import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
-import { ProductChangeModule } from './modules/poduct-changes/product-change.module';
+import { ProductChangeModule } from './modules/product-changes/product-change.module';
 import { PdfMakeService } from './common/pdf/pdfmake.service';
 import { InventoryMovementModule } from './modules/inventory-movements/inventory-movement.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
-    isGlobal: true,
-    validate: zodValidator(envSchema),
+      isGlobal: true,
+      validate: zodValidator(envSchema),
     }),
     PrismaModule,
     EventModule,
@@ -28,15 +28,15 @@ import { InventoryMovementModule } from './modules/inventory-movements/inventory
     UsersModule,
     AuthModule,
     ProductChangeModule,
-    InventoryMovementModule
+    InventoryMovementModule,
   ],
   controllers: [],
   providers: [
     {
-    provide: 'APP_PIPE',
-    useClass: ZodValidationPipe,
+      provide: 'APP_PIPE',
+      useClass: ZodValidationPipe,
     },
-    PdfMakeService
+    PdfMakeService,
   ],
 })
 export class AppModule {}

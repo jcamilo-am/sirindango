@@ -24,10 +24,10 @@ export class AuthController {
           id: 1,
           username: 'admin',
           role: 'admin',
-          createdAt: '2024-06-17T00:00:00.000Z'
-        }
-      }
-    }
+          createdAt: '2024-06-17T00:00:00.000Z',
+        },
+      },
+    },
   })
   async login(@Body() loginDto: LoginDto) {
     return this.authService.login(loginDto);

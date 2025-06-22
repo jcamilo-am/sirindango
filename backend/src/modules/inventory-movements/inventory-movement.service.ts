@@ -1,132 +1,242 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateInventoryMovementInput } from './types/create-inventory-movement.type';
-import { getEventStatus } from '../events/utils/event-status.util';
-
-// Tipos para filtros de movimientos de inventario
-interface InventoryMovementFilters {
-  productId?: number;
-  type?: 'ENTRADA' | 'SALIDA';
-  startDate?: string;
-  endDate?: string;
-}
+import { CreateInventoryMovementDto, InventoryMovementFiltersDto } from './dto/inventory-movement.dto';
+import { InventoryMovementResponseEntity, InventoryMovementDetailedResponseEntity } from './entities/inventory-movement-response.entity';
+import { InventoryMovementValidationHelper } from './helpers/inventory-movement-validation.helper';
+import { CreateInventoryMovementInput, InventoryMovementFilters } from './types/inventory-movement.types';
 
 @Injectable()
 export class InventoryMovementService {
   constructor(private prisma: PrismaService) {}
 
-  async create(data: CreateInventoryMovementInput) {
-    // 1. Valida que el producto exista y esté activo
-    const product = await this.prisma.product.findUnique({ 
-      where: { id: data.productId }, 
-      include: { event: true } 
-    });
-    if (!product) throw new NotFoundException('El producto no existe');
+  /**
+   * Crea un nuevo movimiento de inventario
+   */
+  async create(data: CreateInventoryMovementDto): Promise<InventoryMovementResponseEntity> {
+    // Usar el helper para validaciones completas
+    const validation = await InventoryMovementValidationHelper.validateCompleteMovement(
+      this.prisma,
+      data
+    );
 
-    // Usa el estado calculado
-    const status = getEventStatus(product.event);
-    if (status !== 'SCHEDULED') {
-      throw new BadRequestException('No se pueden registrar movimientos para productos de eventos activos o cerrados');
-    }
-
-    // 3. Si es SALIDA, valida stock suficiente
-    if (data.type === 'SALIDA') {
-      const stock = await this.getCurrentStock(data.productId);
-      if (stock < data.quantity) {
-        throw new BadRequestException('No hay suficiente stock para realizar la salida');
+    // Crear el movimiento
+    const movement = await this.prisma.inventoryMovement.create({ 
+      data: {
+        type: data.type,
+        quantity: data.quantity,
+        reason: data.reason,
+        productId: data.productId,
+        saleId: data.saleId,
+        changeId: data.changeId,
       }
-    }
+    });
 
-    // 4. Si tiene saleId, valida que la venta exista
-    if (data.saleId) {
-      const sale = await this.prisma.sale.findUnique({ where: { id: data.saleId } });
-      if (!sale) throw new NotFoundException('La venta asociada no existe');
-    }
-
-    // 5. Si tiene changeId, valida que el cambio exista
-    if (data.changeId) {
-      const change = await this.prisma.productChange.findUnique({ where: { id: data.changeId } });
-      if (!change) throw new NotFoundException('El cambio asociado no existe');
-    }
-
-    // 6. (Opcional) Evita duplicidad de movimientos para la misma venta/cambio
-    if (data.saleId) {
-      const exists = await this.prisma.inventoryMovement.findFirst({
-        where: { saleId: data.saleId, productId: data.productId, type: data.type }
-      });
-      if (exists) throw new BadRequestException('Ya existe un movimiento para esta venta y producto');
-    }
-    if (data.changeId) {
-      const exists = await this.prisma.inventoryMovement.findFirst({
-        where: { changeId: data.changeId, productId: data.productId, type: data.type }
-      });
-      if (exists) throw new BadRequestException('Ya existe un movimiento para este cambio y producto');
-    }
-
-    // 7. Crea el movimiento
-    return await this.prisma.inventoryMovement.create({ data });
+    return InventoryMovementResponseEntity.fromPrisma(movement);
   }
 
-  async findAll(filters: InventoryMovementFilters = {}) {
-    const { productId, type, startDate, endDate } = filters;
+  /**
+   * Obtiene todos los movimientos con filtros opcionales
+   */
+  async findAll(filters: InventoryMovementFilters): Promise<{
+    movements: InventoryMovementDetailedResponseEntity[];
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      totalPages: number;
+    };
+  }> {
+    // Validar filtros de fecha
+    if (filters.startDate || filters.endDate) {
+      InventoryMovementValidationHelper.validateDateRange(filters.startDate, filters.endDate);
+    }
+
+    // Validar paginación
+    InventoryMovementValidationHelper.validatePagination(filters.page, filters.limit);
+
+    // Construir filtros WHERE
     const where: any = {};
     
-    if (productId) where.productId = productId;
-    if (type) where.type = type;
-    
-    // Filtros de fecha
-    if (startDate || endDate) {
-      where.createdAt = {};
-      if (startDate) where.createdAt.gte = new Date(startDate);
-      if (endDate) where.createdAt.lte = new Date(endDate);
+    if (filters.productId) where.productId = filters.productId;
+    if (filters.type) where.type = filters.type;
+    if (filters.saleId) where.saleId = filters.saleId;
+    if (filters.changeId) where.changeId = filters.changeId;
+    if (filters.eventId) {
+      where.product = { eventId: filters.eventId };
+    }
+    if (filters.artisanId) {
+      where.product = { 
+        ...(where.product || {}),
+        artisanId: filters.artisanId 
+      };
     }
 
-    return await this.prisma.inventoryMovement.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      include: {
-        product: {
-          select: { id: true, name: true }
+    // Filtros de fecha
+    if (filters.startDate || filters.endDate) {
+      where.createdAt = {};
+      if (filters.startDate) where.createdAt.gte = new Date(filters.startDate);
+      if (filters.endDate) where.createdAt.lte = new Date(filters.endDate);
+    }
+
+    // Calcular offset para paginación
+    const offset = (filters.page - 1) * filters.limit;
+
+    // Ejecutar consultas en paralelo
+    const [movements, total] = await Promise.all([
+      this.prisma.inventoryMovement.findMany({
+        where,
+        skip: offset,
+        take: filters.limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          product: {
+            select: { 
+              id: true, 
+              name: true, 
+              price: true,
+              artisan: { select: { name: true } },
+              event: { select: { name: true } }
+            },
+          },
+          sale: {
+            select: { 
+              id: true, 
+              valueCharged: true
+            },
+          },
+          change: {
+            select: { 
+              id: true, 
+              valueDifference: true
+            },
+          },
         },
-        sale: {
-          select: { id: true, valueCharged: true }
-        },
-        change: {
-          select: { id: true, valueDifference: true }
-        }
-      }
-    });
+      }),
+      this.prisma.inventoryMovement.count({ where }),
+    ]);
+
+    const totalPages = Math.ceil(total / filters.limit);
+
+    return {
+      movements: movements.map(movement => 
+        InventoryMovementDetailedResponseEntity.fromPrisma(movement)
+      ),
+      pagination: {
+        page: filters.page,
+        limit: filters.limit,
+        total,
+        totalPages,
+      },
+    };
   }
 
-  async findOne(id: number) {
-    const movement = await this.prisma.inventoryMovement.findUnique({ 
+  /**
+   * Obtiene un movimiento específico por ID
+   */
+  async findOne(id: number): Promise<InventoryMovementDetailedResponseEntity> {
+    const movement = await this.prisma.inventoryMovement.findUnique({
       where: { id },
       include: {
         product: {
-          select: { id: true, name: true }
+          select: { 
+            id: true, 
+            name: true, 
+            price: true,
+            artisan: { select: { name: true } },
+            event: { select: { name: true } }
+          },
         },
         sale: {
-          select: { id: true, valueCharged: true }
+          select: { 
+            id: true, 
+            valueCharged: true
+          },
         },
         change: {
-          select: { id: true, valueDifference: true }
-        }
-      }
+          select: { 
+            id: true, 
+            valueDifference: true
+          },
+        },
+      },
     });
-    if (!movement) throw new NotFoundException('Movimiento no encontrado');
-    return movement;
+
+    if (!movement) {
+      throw new NotFoundException('Movimiento de inventario no encontrado');
+    }
+
+    return InventoryMovementDetailedResponseEntity.fromPrisma(movement);
   }
 
-  // Utilidad para stock actual
-  private async getCurrentStock(productId: number): Promise<number> {
-    const entradas = await this.prisma.inventoryMovement.aggregate({
-      where: { productId, type: 'ENTRADA' },
-      _sum: { quantity: true },
-    });
-    const salidas = await this.prisma.inventoryMovement.aggregate({
-      where: { productId, type: 'SALIDA' },
-      _sum: { quantity: true },
-    });
-    return (entradas._sum.quantity ?? 0) - (salidas._sum.quantity ?? 0);
+  /**
+   * Obtiene el stock actual de un producto
+   */
+  async getCurrentStock(productId: number): Promise<number> {
+    return InventoryMovementValidationHelper.calculateCurrentStock(this.prisma, productId);
+  }
+
+  /**
+   * Obtiene estadísticas de movimientos de inventario
+   */
+  async getStats(filters: {
+    eventId?: number;
+    artisanId?: number;
+    startDate?: string;
+    endDate?: string;
+  }) {
+    // Validar filtros de fecha
+    if (filters.startDate || filters.endDate) {
+      InventoryMovementValidationHelper.validateDateRange(filters.startDate, filters.endDate);
+    }
+
+    const where: any = {};
+    
+    if (filters.eventId) {
+      where.product = { eventId: filters.eventId };
+    }
+    if (filters.artisanId) {
+      where.product = { 
+        ...(where.product || {}),
+        artisanId: filters.artisanId 
+      };
+    }
+    if (filters.startDate || filters.endDate) {
+      where.createdAt = {};
+      if (filters.startDate) where.createdAt.gte = new Date(filters.startDate);
+      if (filters.endDate) where.createdAt.lte = new Date(filters.endDate);
+    }
+
+    const [
+      totalMovements,
+      totalEntradas,
+      totalSalidas,
+      entradasQuantity,
+      salidasQuantity
+    ] = await Promise.all([
+      this.prisma.inventoryMovement.count({ where }),
+      this.prisma.inventoryMovement.count({ 
+        where: { ...where, type: 'ENTRADA' } 
+      }),
+      this.prisma.inventoryMovement.count({ 
+        where: { ...where, type: 'SALIDA' } 
+      }),
+      this.prisma.inventoryMovement.aggregate({
+        where: { ...where, type: 'ENTRADA' },
+        _sum: { quantity: true },
+      }),
+      this.prisma.inventoryMovement.aggregate({
+        where: { ...where, type: 'SALIDA' },
+        _sum: { quantity: true },
+      }),
+    ]);
+
+    return {
+      totalMovements,
+      totalEntradas,
+      totalSalidas,
+      totalQuantityEntradas: entradasQuantity._sum.quantity ?? 0,
+      totalQuantitySalidas: salidasQuantity._sum.quantity ?? 0,
+      netQuantity: (entradasQuantity._sum.quantity ?? 0) - (salidasQuantity._sum.quantity ?? 0),
+    };
   }
 }

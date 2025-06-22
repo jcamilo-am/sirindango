@@ -1,8 +1,31 @@
-import { Controller, Get, Query, Post, Body, Param, Patch, Delete, ParseIntPipe, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Query,
+  Post,
+  Body,
+  Param,
+  Patch,
+  Delete,
+  ParseIntPipe,
+  UseGuards,
+} from '@nestjs/common';
 import { ProductService } from './products.service';
-import { CreateProductDto, CreateProductSwaggerDto } from './dto/create-product.dto';
-import { UpdateProductDto, UpdateProductSwaggerDto } from './dto/update-product.dto';
-import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiParam, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
+import { CreateProductDto } from './dto/create-product.dto';
+import { UpdateProductDto } from './dto/update-product.dto';
+import {
+  ProductEntity,
+  ProductWithEventEntity,
+} from './entities/product.entity';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBody,
+  ApiParam,
+  ApiQuery,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @ApiTags('Productos')
@@ -18,8 +41,12 @@ export class ProductController {
    */
   @Post()
   @ApiOperation({ summary: 'Crear producto' })
-  @ApiBody({ type: CreateProductSwaggerDto })
-  @ApiResponse({ status: 201, description: 'Producto creado', type: CreateProductSwaggerDto })
+  @ApiBody({ type: CreateProductDto })
+  @ApiResponse({
+    status: 201,
+    description: 'Producto creado',
+    type: ProductEntity,
+  })
   create(@Body() data: CreateProductDto) {
     return this.productService.create(data);
   }
@@ -31,12 +58,21 @@ export class ProductController {
   @ApiOperation({ summary: 'Listar productos' })
   @ApiQuery({ name: 'eventId', required: false, type: Number, example: 1 })
   @ApiQuery({ name: 'artisanId', required: false, type: Number, example: 2 })
-  @ApiQuery({ name: 'order', required: false, enum: ['name', 'quantity'], example: 'name' })
-  @ApiResponse({ status: 200, description: 'Lista de productos', type: [CreateProductSwaggerDto] })
+  @ApiQuery({
+    name: 'order',
+    required: false,
+    enum: ['name', 'quantity'],
+    example: 'name',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Lista de productos',
+    type: [ProductWithEventEntity],
+  })
   findAll(
     @Query('eventId') eventId?: string,
     @Query('artisanId') artisanId?: string,
-    @Query('order') order?: 'name' | 'quantity'
+    @Query('order') order?: 'name' | 'quantity',
   ) {
     return this.productService.findAll({
       eventId: eventId ? Number(eventId) : undefined,
@@ -51,7 +87,11 @@ export class ProductController {
   @Get(':id')
   @ApiOperation({ summary: 'Obtener producto por ID' })
   @ApiParam({ name: 'id', type: Number, example: 1 })
-  @ApiResponse({ status: 200, description: 'Producto encontrado', type: CreateProductSwaggerDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Producto encontrado',
+    type: ProductEntity,
+  })
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.productService.findOne(id);
   }
@@ -63,9 +103,16 @@ export class ProductController {
   @Patch(':id')
   @ApiOperation({ summary: 'Actualizar producto' })
   @ApiParam({ name: 'id', type: Number, example: 1 })
-  @ApiBody({ type: UpdateProductSwaggerDto })
-  @ApiResponse({ status: 200, description: 'Producto actualizado', type: UpdateProductSwaggerDto })
-  update(@Param('id', ParseIntPipe) id: number, @Body() data: UpdateProductDto) {
+  @ApiBody({ type: UpdateProductDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Producto actualizado',
+    type: ProductEntity,
+  })
+  update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() data: UpdateProductDto,
+  ) {
     return this.productService.update(id, data);
   }
 
@@ -76,7 +123,11 @@ export class ProductController {
   @Delete(':id')
   @ApiOperation({ summary: 'Eliminar producto' })
   @ApiParam({ name: 'id', type: Number, example: 1 })
-  @ApiResponse({ status: 200, description: 'Producto eliminado', type: CreateProductSwaggerDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Producto eliminado',
+    type: ProductEntity,
+  })
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.productService.remove(id);
   }

@@ -1,10 +1,32 @@
-import { Body, Controller, Get, Post, Param, Patch, ParseIntPipe, Query, UseGuards, Res } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Post,
+  Param,
+  Patch,
+  ParseIntPipe,
+  Query,
+  UseGuards,
+  Res,
+} from '@nestjs/common';
 import { EventService } from './events.service';
-import { CreateEventDto, CreateEventSwaggerDto } from './dto/create-event.dto';
-import { UpdateEventDto, UpdateEventSwaggerDto } from './dto/update-event.dto';
-import { EventSummaryDto } from './dto/event-summary.dto';
-import { EventAccountingSummaryDto } from './dto/event-accounting-summary.dto';
-import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiParam, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
+import { CreateEventDto } from './dto/create-event.dto';
+import { UpdateEventDto } from './dto/update-event.dto';
+import {
+  EventEntity,
+  EventWithSummaryEntity,
+  EventWithAccountingEntity,
+} from './entities/event.entity';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBody,
+  ApiParam,
+  ApiQuery,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PdfMakeService } from '../../common/pdf/pdfmake.service';
 import { Response } from 'express';
@@ -26,9 +48,9 @@ export class EventController {
    */
   @Post()
   @ApiOperation({ summary: 'Crear un evento' })
-  @ApiBody({ type: CreateEventSwaggerDto })
-  @ApiResponse({ status: 201, description: 'Evento creado', type: CreateEventSwaggerDto })
-  create(@Body() body: CreateEventDto) {
+  @ApiBody({ type: CreateEventDto })
+  @ApiResponse({ status: 201, description: 'Evento creado', type: EventEntity })
+  create(@Body() body: CreateEventDto): Promise<EventEntity> {
     return this.eventService.create(body);
   }
 
@@ -37,8 +59,12 @@ export class EventController {
    */
   @Get()
   @ApiOperation({ summary: 'Listar todos los eventos' })
-  @ApiResponse({ status: 200, description: 'Lista de eventos', type: [CreateEventSwaggerDto] })
-  findAll() {
+  @ApiResponse({
+    status: 200,
+    description: 'Lista de eventos',
+    type: [EventEntity],
+  })
+  findAll(): Promise<EventEntity[]> {
     return this.eventService.findAll();
   }
 
@@ -48,8 +74,12 @@ export class EventController {
   @Get(':id')
   @ApiOperation({ summary: 'Obtener un evento por ID' })
   @ApiParam({ name: 'id', type: Number, example: 1 })
-  @ApiResponse({ status: 200, description: 'Evento encontrado', type: CreateEventSwaggerDto })
-  findOne(@Param('id', ParseIntPipe) id: number) {
+  @ApiResponse({
+    status: 200,
+    description: 'Evento encontrado',
+    type: EventEntity,
+  })
+  findOne(@Param('id', ParseIntPipe) id: number): Promise<EventEntity> {
     return this.eventService.findOne(id);
   }
 
@@ -60,9 +90,16 @@ export class EventController {
   @Patch(':id')
   @ApiOperation({ summary: 'Actualizar un evento' })
   @ApiParam({ name: 'id', type: Number, example: 1 })
-  @ApiBody({ type: UpdateEventSwaggerDto })
-  @ApiResponse({ status: 200, description: 'Evento actualizado', type: UpdateEventSwaggerDto })
-  update(@Param('id', ParseIntPipe) id: number, @Body() body: UpdateEventDto) {
+  @ApiBody({ type: UpdateEventDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Evento actualizado',
+    type: EventEntity,
+  })
+  update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: UpdateEventDto,
+  ): Promise<EventEntity> {
     return this.eventService.update(id, body);
   }
 
@@ -72,8 +109,12 @@ export class EventController {
   @Get('search/by-name')
   @ApiOperation({ summary: 'Buscar eventos por nombre' })
   @ApiQuery({ name: 'name', type: String, example: 'Feria' })
-  @ApiResponse({ status: 200, description: 'Eventos encontrados', type: [CreateEventSwaggerDto] })
-  findByName(@Query('name') name: string) {
+  @ApiResponse({
+    status: 200,
+    description: 'Eventos encontrados',
+    type: [EventEntity],
+  })
+  findByName(@Query('name') name: string): Promise<EventEntity[]> {
     return this.eventService.findByName(name);
   }
 
@@ -85,8 +126,14 @@ export class EventController {
   @Get(':id/summary')
   @ApiOperation({ summary: 'Resumen del evento' })
   @ApiParam({ name: 'id', type: Number, example: 1 })
-  @ApiResponse({ status: 200, description: 'Resumen del evento', type: EventSummaryDto })
-  async getEventSummary(@Param('id', ParseIntPipe) id: number): Promise<EventSummaryDto> {
+  @ApiResponse({
+    status: 200,
+    description: 'Resumen del evento',
+    type: EventWithSummaryEntity,
+  })
+  async getEventSummary(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<EventWithSummaryEntity> {
     return this.eventService.getEventSummary(id);
   }
 
@@ -97,8 +144,12 @@ export class EventController {
   @Patch(':id/close')
   @ApiOperation({ summary: 'Cerrar evento (bloquea ventas y productos)' })
   @ApiParam({ name: 'id', type: Number, example: 1 })
-  @ApiResponse({ status: 200, description: 'Evento cerrado', type: CreateEventSwaggerDto })
-  closeEvent(@Param('id', ParseIntPipe) id: number) {
+  @ApiResponse({
+    status: 200,
+    description: 'Evento cerrado',
+    type: EventEntity,
+  })
+  closeEvent(@Param('id', ParseIntPipe) id: number): Promise<EventEntity> {
     return this.eventService.closeEvent(id);
   }
 
@@ -108,9 +159,19 @@ export class EventController {
    * La lógica de cálculo está en el servicio.
    */
   @Get(':id/accounting-summary')
-  @ApiOperation({ summary: 'Resumen contable general del evento (detalle por artesano y totales)' })
-  @ApiResponse({ status: 200, type: EventAccountingSummaryDto })
-  async getEventAccountingSummary(@Param('id', ParseIntPipe) id: number): Promise<EventAccountingSummaryDto> {
+  @ApiOperation({
+    summary:
+      'Resumen contable general del evento (detalle por artesano y totales)',
+  })
+  @ApiParam({ name: 'id', type: Number, example: 1 })
+  @ApiResponse({
+    status: 200,
+    description: 'Resumen contable del evento',
+    type: EventWithAccountingEntity,
+  })
+  async getEventAccountingSummary(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<EventWithAccountingEntity> {
     return this.eventService.getEventAccountingSummary(id);
   }
 
@@ -119,14 +180,15 @@ export class EventController {
    */
   @Get(':id/accounting-summary/pdf')
   @ApiOperation({ summary: 'Descargar resumen contable del evento en PDF' })
+  @ApiParam({ name: 'id', type: Number, example: 1 })
   async downloadEventAccountingSummaryPdf(
     @Param('id', ParseIntPipe) id: number,
     @Res() res: Response,
-  ) {
+  ): Promise<void> {
     const summary = await this.eventService.getEventAccountingSummary(id);
 
-    // Arma el docDefinition para PDFMake
-    const docDefinition = buildEventAccountingPdf(summary);
+    // Convierte la entidad al DTO necesario para el PDF
+    const docDefinition = buildEventAccountingPdf(summary.toPdfDto());
 
     const pdfBuffer = await this.pdfMakeService.generatePdf(docDefinition);
 
