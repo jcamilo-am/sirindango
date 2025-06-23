@@ -153,7 +153,7 @@ export default function ArtisansPage() {
         setErrors({ identification: message });
         toast.error(message);
       } else {
-        toast.error(message);
+      toast.error(message);
       }
     }
   };
@@ -212,7 +212,7 @@ export default function ArtisansPage() {
               </div>
               <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button className="bg-pink-600 hover:bg-pink-700 text-white">
+                  <Button className="bg-green-600 hover:bg-green-700 text-white">
                     <Plus className="h-4 w-4 mr-2 text-primary" />
                     Nuevo Artesano
                   </Button>
@@ -220,12 +220,12 @@ export default function ArtisansPage() {
                 <DialogContent className="sm:max-w-md">
                   <DialogHeader>
                     <DialogTitle>
-                      {editingArtisan ? 'Editar Artesana' : 'Nueva Artesana'}
+                      {editingArtisan ? 'Editar Artesano' : 'Nuevo Artesano'}
                     </DialogTitle>
                   </DialogHeader>
                   <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
-                      <Label htmlFor="name" className="mb-2 block">Nombre del Artesano *</Label>
+                      <Label htmlFor="name" className="mb-2 block">Nombre del Artesano <span className="text-red-500">*</span></Label>
                       <Input
                         id="name"
                         value={formData.name}
@@ -237,7 +237,7 @@ export default function ArtisansPage() {
                       {errors.name && <p className="text-red-500 text-sm mt-1 font-medium">{errors.name}</p>}
                     </div>
                     <div>
-                      <Label htmlFor="identification" className="mb-2">Identificación *</Label>
+                      <Label htmlFor="identification" className="mb-2">Identificación <span className="text-red-500">*</span></Label>
                       <Input
                         id="identification"
                         value={formData.identification}
@@ -260,10 +260,10 @@ export default function ArtisansPage() {
                       <Label htmlFor="active">Activo</Label>
                     </div>
                     <div className="flex gap-2 pt-4">
-                      <Button type="submit" className="flex-1 bg-pink-600 hover:bg-pink-700 text-white">
+                      <Button type="submit" className="flex-1 bg-green-600 hover:bg-green-800 text-white">
                         {editingArtisan ? 'Actualizar' : 'Registrar'}
                       </Button>
-                      <Button type="button" variant="outline" onClick={resetForm}>
+                      <Button type="button" variant="default" onClick={resetForm}>
                         Cancelar
                       </Button>
                     </div>
@@ -285,13 +285,13 @@ export default function ArtisansPage() {
               ) : (
                 Array.isArray(artisans) && artisans.map((artisan) => (
                   <Card key={artisan.id} className="hover:shadow-md transition-shadow">
-                    <CardContent className="p-6 bg-background">
+                    <CardContent className="py-2 px-5 bg-background">
                       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-2">
-                            <h3 className="font-semibold text-lg text-foreground">
-                              {artisan.name}
-                            </h3>
+                            <h3 className="font-semibold text-2xl text-foreground">
+                            {artisan.name}
+                          </h3>
                             <Badge 
                               variant={artisan.active ? "default" : "destructive"}
                               className={artisan.active ? "bg-green-100 text-green-800 border-green-200" : ""}
@@ -299,7 +299,7 @@ export default function ArtisansPage() {
                               {artisan.active ? "Activo" : "Inactivo"}
                             </Badge>
                           </div>
-                          <div className="text-sm text-muted-foreground">
+                          <div className="text-md text-gray-800">
                             <p>Identificación: {artisan.identification}</p>
                           </div>
                         </div>

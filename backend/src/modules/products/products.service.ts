@@ -24,10 +24,9 @@ export class ProductService {
 
   // Crea un producto y su movimiento de inventario inicial
   async create(data: CreateProductInput) {
-    await this.validateEventEditable(data.eventId);
+    await this.validateEventForProductCreation(data.eventId);
 
-    // Valida evento y artesano
-    await this.validateEvent({ eventId: data.eventId });
+    // Valida que el artesano existe y está activo
     const artisan = await this.prisma.artisan.findUnique({ where: { id: data.artisanId } });
     if (!artisan) throw new NotFoundException('El artesano no existe');
     if (artisan.active === false) throw new BadRequestException('El artesano no está activo');
@@ -76,31 +75,48 @@ export class ProductService {
     if (eventId) where.eventId = eventId;
     if (artisanId) where.artisanId = artisanId;
 
-    // Solo incluir productos de eventos no cerrados
-    where.event = { state: { not: 'CLOSED' } };
-
     let orderBy: any = undefined;
     if (order === 'name') orderBy = { name: 'asc' };
 
     const products = await this.prisma.product.findMany({
       where,
       orderBy,
-      include: { event: true }
+      include: { 
+        event: true,
+        artisan: true
+      }
     });
 
-    // Agrega el stock calculado a cada producto
+    // Agrega el stock calculado y el status del evento a cada producto
     return Promise.all(products.map(async (product) => ({
       ...product,
       stock: await this.getCurrentStock(product.id),
+      event: product.event ? {
+        ...product.event,
+        status: getEventStatus(product.event)
+      } : undefined
     })));
   }
 
   // Busca un producto por ID, lanza NotFoundException si no existe, retorna stock calculado
   async findOne(id: number) {
-    const product = await this.prisma.product.findUnique({ where: { id } });
+    const product = await this.prisma.product.findUnique({ 
+      where: { id },
+      include: {
+        event: true,
+        artisan: true
+      }
+    });
     if (!product) throw new NotFoundException('El producto no existe');
     const stock = await this.getCurrentStock(product.id);
-    return { ...product, stock };
+    return { 
+      ...product, 
+      stock,
+      event: product.event ? {
+        ...product.event,
+        status: getEventStatus(product.event)
+      } : undefined
+    };
   }
 
   // Actualiza un producto y su movimiento de inventario inicial
@@ -123,7 +139,7 @@ export class ProductService {
     }
 
     // Valida evento y artesano si cambian
-    if (data.eventId) await this.validateEvent({ eventId: data.eventId });
+    if (data.eventId) await this.validateEventEditable(data.eventId);
     if (data.artisanId) {
       const artisan = await this.prisma.artisan.findUnique({ where: { id: data.artisanId } });
       if (!artisan) throw new NotFoundException('El artesano no existe');
@@ -163,6 +179,16 @@ export class ProductService {
     const status = getEventStatus(event);
     if (status !== 'SCHEDULED') {
       throw new BadRequestException('Solo puedes modificar productos antes de que el evento inicie.');
+    }
+  }
+
+  // Valida que el evento permita crear productos (SCHEDULED o ACTIVE)
+  async validateEventForProductCreation(eventId: number) {
+    const event = await this.prisma.event.findUnique({ where: { id: eventId } });
+    if (!event) throw new NotFoundException('El evento no existe');
+    const status = getEventStatus(event);
+    if (status === 'CLOSED') {
+      throw new BadRequestException('No puedes crear productos en un evento cerrado.');
     }
   }
 

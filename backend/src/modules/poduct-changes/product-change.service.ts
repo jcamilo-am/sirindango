@@ -117,8 +117,91 @@ export class ProductChangeService {
     });
   }
 
+  async findAll(filters?: {
+    saleId?: number;
+    eventId?: number;
+    artisanId?: number;
+  }) {
+    const where: any = {};
+    
+    if (filters?.saleId) {
+      where.saleId = filters.saleId;
+    }
+    
+    if (filters?.eventId || filters?.artisanId) {
+      where.sale = {};
+      if (filters.eventId) where.sale.eventId = filters.eventId;
+      if (filters.artisanId) where.sale.artisanId = filters.artisanId;
+    }
+
+    return await this.prisma.productChange.findMany({
+      where,
+      include: {
+        sale: {
+          select: {
+            id: true,
+            quantitySold: true,
+            valueCharged: true,
+            paymentMethod: true,
+            date: true,
+            eventId: true,
+            artisanId: true,
+          }
+        },
+        returnedProduct: {
+          select: {
+            id: true,
+            name: true,
+            price: true,
+            category: true,
+          }
+        },
+        deliveredProduct: {
+          select: {
+            id: true,
+            name: true,
+            price: true,
+            category: true,
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+  }
+
   async findOne(id: number) {
-    const change = await this.prisma.productChange.findUnique({ where: { id } });
+    const change = await this.prisma.productChange.findUnique({ 
+      where: { id },
+      include: {
+        sale: {
+          select: {
+            id: true,
+            quantitySold: true,
+            valueCharged: true,
+            paymentMethod: true,
+            date: true,
+          }
+        },
+        returnedProduct: {
+          select: {
+            id: true,
+            name: true,
+            price: true,
+            category: true,
+          }
+        },
+        deliveredProduct: {
+          select: {
+            id: true,
+            name: true,
+            price: true,
+            category: true,
+          }
+        }
+      }
+    });
     if (!change) throw new NotFoundException('Cambio no encontrado');
     return change;
   }

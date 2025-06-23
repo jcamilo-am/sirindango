@@ -64,7 +64,31 @@ export class InventoryMovementService {
     }
 
     // 7. Crea el movimiento
-    return await this.prisma.inventoryMovement.create({ data });
+    return await this.prisma.inventoryMovement.create({ 
+      data,
+      include: {
+        product: {
+          select: { 
+            id: true, 
+            name: true, 
+            price: true, 
+            category: true,
+            artisan: {
+              select: { id: true, name: true }
+            },
+            event: {
+              select: { id: true, name: true }
+            }
+          }
+        },
+        sale: {
+          select: { id: true, valueCharged: true }
+        },
+        change: {
+          select: { id: true, valueDifference: true }
+        }
+      }
+    });
   }
 
   async findAll(filters: InventoryMovementFilters = {}) {
@@ -86,7 +110,18 @@ export class InventoryMovementService {
       orderBy: { createdAt: 'desc' },
       include: {
         product: {
-          select: { id: true, name: true }
+          select: { 
+            id: true, 
+            name: true, 
+            price: true, 
+            category: true,
+            artisan: {
+              select: { id: true, name: true }
+            },
+            event: {
+              select: { id: true, name: true }
+            }
+          }
         },
         sale: {
           select: { id: true, valueCharged: true }
@@ -103,7 +138,18 @@ export class InventoryMovementService {
       where: { id },
       include: {
         product: {
-          select: { id: true, name: true }
+          select: { 
+            id: true, 
+            name: true, 
+            price: true, 
+            category: true,
+            artisan: {
+              select: { id: true, name: true }
+            },
+            event: {
+              select: { id: true, name: true }
+            }
+          }
         },
         sale: {
           select: { id: true, valueCharged: true }

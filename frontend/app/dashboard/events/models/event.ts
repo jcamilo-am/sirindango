@@ -9,7 +9,8 @@ export const EventSchema = z.object({
   endDate: z.string(),
   commissionAssociation: z.number(),
   commissionSeller: z.number(),
-  state: z.nativeEnum(EventState).optional().default(EventState.ACTIVE),
+  state: z.nativeEnum(EventState).optional().default(EventState.SCHEDULED),
+  status: z.nativeEnum(EventState).optional(),
   createdAt: z.string().optional(),
   // Agrega más campos si tu backend los retorna
 });

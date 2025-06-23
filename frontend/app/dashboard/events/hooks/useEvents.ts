@@ -56,9 +56,9 @@ export function useEvents() {
       setEvents((prev) => [...prev, res.data]);
       return res.data as Event;
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Error al crear evento';
-      setError(message);
-      return null;
+      const errorMessage = (err as { response?: { data?: { message?: string } } }).response?.data?.message || 'Error al crear evento';
+      setError(errorMessage);
+      throw new Error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -73,9 +73,10 @@ export function useEvents() {
       setEvents((prev) => prev.map((e) => (e.id === id ? res.data : e)));
       return res.data as Event;
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Error al editar evento';
-      setError(message);
-      return null;
+      // Extraer el mensaje específico del backend
+      const errorMessage = (err as { response?: { data?: { message?: string } } }).response?.data?.message || 'Error al editar evento';
+      setError(errorMessage);
+      throw new Error(errorMessage); // Lanzar error para que el componente lo maneje
     } finally {
       setLoading(false);
     }
@@ -90,9 +91,9 @@ export function useEvents() {
       setEvents((prev) => prev.filter((e) => e.id !== id));
       return true;
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Error al eliminar evento';
-      setError(message);
-      return false;
+      const errorMessage = (err as { response?: { data?: { message?: string } } }).response?.data?.message || 'Error al eliminar evento';
+      setError(errorMessage);
+      throw new Error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -124,9 +125,9 @@ export function useEvents() {
       setEvents((prev) => prev.map((e) => (e.id === id ? res.data : e)));
       return res.data as Event;
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Error al cerrar evento';
-      setError(message);
-      return null;
+      const errorMessage = (err as { response?: { data?: { message?: string } } }).response?.data?.message || 'Error al cerrar evento';
+      setError(errorMessage);
+      throw new Error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -200,6 +201,49 @@ export function useEvents() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Funciones auxiliares para filtrado
+  const getEventsByStatus = (status: string) => {
+    return events.filter(event => event.status === status);
+  };
+
+  const getEventsByState = (state: string) => {
+    return events.filter(event => event.state === state);
+  };
+
+  const searchEventsByNameLocal = (name: string) => {
+    return events.filter(event => 
+      event.name.toLowerCase().includes(name.toLowerCase())
+    );
+  };
+
+  const getEventsByDateRange = (startDate: string, endDate: string) => {
+    return events.filter(event => {
+      const eventStart = new Date(event.startDate);
+      const eventEnd = new Date(event.endDate);
+      const filterStart = new Date(startDate);
+      const filterEnd = new Date(endDate);
+      
+      return eventStart >= filterStart && eventEnd <= filterEnd;
+    });
+  };
+
+  const getEventsOrderedByDate = (ascending: boolean = true) => {
+    return [...events].sort((a, b) => {
+      const dateA = new Date(a.startDate);
+      const dateB = new Date(b.startDate);
+      return ascending ? dateA.getTime() - dateB.getTime() : dateB.getTime() - dateA.getTime();
+    });
+  };
+
+  const getEventsOrderedByName = () => {
+    return [...events].sort((a, b) => a.name.localeCompare(b.name));
+  };
+
+  const getUniqueLocations = () => {
+    const locations = events.map(event => event.location).filter(Boolean);
+    return [...new Set(locations)].sort();
+  };
+
   return {
     events,
     loading,
@@ -215,5 +259,13 @@ export function useEvents() {
     searchEventsByName,
     getEventAccountingSummary,
     downloadEventAccountingPdf,
+    // Funciones auxiliares
+    getEventsByStatus,
+    getEventsByState,
+    searchEventsByNameLocal,
+    getEventsByDateRange,
+    getEventsOrderedByDate,
+    getEventsOrderedByName,
+    getUniqueLocations,
   };
 }

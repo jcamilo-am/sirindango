@@ -6,9 +6,10 @@ import {
   IconChartBar,
   IconLogout,
   IconPackage,
-  IconSettings,
   IconShoppingCart,
   IconUsers,
+  IconClipboardList,
+  IconArrowsExchange,
 } from "@tabler/icons-react"
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "./sidebar"
 import { usePathname } from "next/navigation"
@@ -32,19 +33,24 @@ const navMainItems = [
     icon: IconUsers,
   },
   {
+    title: "Inventario",
+    url: "/dashboard/inventory",
+    icon: IconClipboardList,
+  },
+  {
     title: "Registrar ventas",
     url: "/dashboard/sales",
     icon: IconShoppingCart,
   },
   {
+    title: "Cambios de productos",
+    url: "/dashboard/change",
+    icon: IconArrowsExchange,
+  },
+  {
     title: "Resumen por integrantes",
     url: "/dashboard/resume",
     icon: IconChartBar,
-  },
-  {
-    title: "Configuración",
-    url: "#",
-    icon: IconSettings,
   },
 ];
 
@@ -58,7 +64,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   };
 
   return (
-    <Sidebar collapsible="offcanvas" className=" text-white border-r-0" {...props}>
+    <Sidebar collapsible="offcanvas" className=" text-black border-r-1" {...props}>
       <SidebarHeader className=" border-b  p-6">
         <div className="flex flex-col items-center gap-3">
           <div className="w-20 h-20 rounded-full flex items-center justify-center">
@@ -67,10 +73,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               alt="Logo IUIAI WASI"
               width={80}
               height={80}
-              className="object-cover rounded-full"
+              className="object-cover rounded-full border-2 border-black"
             />
           </div>
-          <span className="text-white font-semibold text-sm tracking-wider">IUIAI WASI</span>
+          <span className="text-black font-semibold text-md tracking-wider">IUIAI WASI</span>
         </div>
       </SidebarHeader>
       
@@ -89,8 +95,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 <SidebarMenuButton
                   asChild
                   className={`
-                    flex items-center gap-3 px-3 py-3 rounded-lg hover:text-black hover:bg-white transition-colors
-                    ${isActive ? 'bg-white text-black' : 'text-white'}
+                    flex items-center gap-3 px-3 py-3 rounded-lg hover:text-black hover:bg-gray-300 transition-colors backdrop-blur-sm border
+                    ${isActive ? 'bg-orange-300 text-black font-bold hover:bg-orange-500 hover:text-white' : 'text-black'}
                   `}
                 >
                   <Link href={item.url} className="flex items-center gap-3 w-full border-l-4 border-l-orange-500">
@@ -105,7 +111,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           {/* Botón de logout separado */}
           <SidebarMenuItem>
             <SidebarMenuButton
-              className="flex items-center gap-3 px-3 py-3 rounded-lg border-l-4 border-l-red-500 hover:text-black hover:bg-red-50 hover:border-red-200 transition-colors text-white cursor-pointer"
+              className="flex items-center bg-red-500 gap-3 px-3 py-3 rounded-lg border-l-4 border-l-red-800 hover:text-white hover:font-bold hover:bg-red-600 transition-colors text-white cursor-pointer"
               onClick={handleLogout}
             >
               <div className="flex items-center gap-3 w-full">
@@ -119,11 +125,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       
       <SidebarFooter className=" border-t p-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-gray-600 rounded-full flex items-center justify-center">
-            <IconUsers className="h-5 w-5 text-white" />
+          <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center">
+            <IconUsers className="h-5 w-5 text-black" />
           </div>
           <div className="flex flex-col">
-            <span className="text-white text-sm font-medium">
+            <span className="text-black text-sm font-medium">
               {user?.username || 'Usuario'}
             </span>
             <span className="text-gray-400 text-xs">

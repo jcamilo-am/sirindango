@@ -66,8 +66,8 @@ export default function ResumePage() {
           <div className="@container/main flex flex-1 flex-col gap-2">
             <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 px-4 lg:px-6">
               <div>
-                <h2 className="text-2xl font-bold text-white">Resumen de Ventas</h2>
-                <p className="text-white">Análisis de ventas por evento y artesana</p>
+                <h2 className="text-2xl font-bold ">Resumen de Ventas</h2>
+                <p className="">Análisis de ventas por evento y artesana</p>
               </div>
 
               {/* Loading indicator */}
@@ -107,7 +107,7 @@ export default function ResumePage() {
 
               {/* Mensaje si no hay eventos */}
               {!isLoading && events.length === 0 && (
-                <div className="text-center text-gray-400 py-8">
+                <div className="text-center text-gray-500 py-8">
                   No hay eventos ni ventas registradas.
                 </div>
               )}
@@ -125,25 +125,25 @@ export default function ResumePage() {
                   </CardHeader>
                   <CardContent>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                      <div className="text-center p-4 bg-green-50 rounded-lg">
+                      <div className="text-center p-4 bg-green-100 rounded-lg">
                         <p className="text-sm text-gray-900">Ingresos Totales</p>
                         <p className="text-3xl font-bold text-green-600">
                           ${selectedEventSummary.totalRevenue.toLocaleString()}
                         </p>
                       </div>
-                      <div className="text-center p-4 bg-blue-50 rounded-lg">
+                      <div className="text-center p-4 bg-blue-100 rounded-lg">
                         <p className="text-sm text-gray-900">Productos Vendidos</p>
                         <p className="text-3xl font-bold text-blue-600">
                           {selectedEventSummary.totalProducts}
                         </p>
                       </div>
-                      <div className="text-center p-4 bg-purple-50 rounded-lg">
+                      <div className="text-center p-4 bg-purple-100 rounded-lg">
                         <p className="text-sm text-gray-900">Artesanas Participantes</p>
                         <p className="text-3xl font-bold text-purple-600">
                           {selectedEventSummary.uniqueArtisans}
                         </p>
                       </div>
-                      <div className="text-center p-4 bg-orange-50 rounded-lg">
+                      <div className="text-center p-4 bg-orange-100 rounded-lg">
                         <p className="text-sm text-gray-900">Transacciones</p>
                         <p className="text-3xl font-bold text-orange-600">
                           {selectedEventSummary.salesCount}
@@ -162,26 +162,26 @@ export default function ResumePage() {
                       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                         <div className="flex-1">
                           <div className="flex items-center gap-3 mb-2">
-                            <h4 className="font-semibold text-3xl text-white">
+                            <h4 className="font-semibold text-3xl">
                               {artisanData.name}
                             </h4>
                             <Badge variant="secondary">#{index + 1}</Badge>
                           </div>
                           <div className="grid grid-cols-2 gap-4 mb-3">
                             <div>
-                              <p className="text-sm text-gray-300">Ingresos</p>
+                              <p className="text-sm ">Ingresos</p>
                               <p className="font-bold text-3xl text-green-600">
                                 ${artisanData.totalRevenue.toLocaleString()}
                               </p>
                             </div>
                             <div>
-                              <p className="text-sm  text-gray-300">Productos Vendidos</p>
+                              <p className="text-sm ">Productos Vendidos</p>
                               <p className="font-bold text-3xl text-blue-600">
                                 {artisanData.totalProducts}
                               </p>
                             </div>
                           </div>
-                          <div className="text-md text-gray-400">
+                          <div className="text-md text-gray-700">
                             {artisanData.sales.length} transacciones realizadas
                           </div>
                         </div>

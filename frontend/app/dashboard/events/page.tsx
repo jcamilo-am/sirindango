@@ -1,13 +1,14 @@
 'use client';
 
-import { useState } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
+import { useState, useRef } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { Plus, Edit2, Calendar, TrendingUp, DollarSign, FileText, AlertTriangle } from 'lucide-react';
+import { Plus, Edit2, Calendar, TrendingUp, DollarSign, FileText, AlertTriangle, Filter, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import {
   AlertDialog,
@@ -42,12 +43,17 @@ export default function EventsPage() {
     closeEvent,
     getEventSummary,
     downloadEventAccountingPdf,
+    getUniqueLocations,
   } = useEvents();
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<number | null>(null);
   const [eventToClose, setEventToClose] = useState<number | null>(null);
   const [isClosingEvent, setIsClosingEvent] = useState(false);
+  const [holdProgress, setHoldProgress] = useState(0);
+  const [isHolding, setIsHolding] = useState(false);
+  const [showCloseDialog, setShowCloseDialog] = useState(false);
+  const holdIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const [formData, setFormData] = useState<EventForm>({
     name: '',
     location: '',
@@ -55,6 +61,14 @@ export default function EventsPage() {
     endDate: '',
     commissionAssociation: 10,
     commissionSeller: 5,
+  });
+
+  // Estados para filtros
+  const [filters, setFilters] = useState({
+    searchTerm: '',
+    status: 'all',
+    state: 'all',
+    location: 'all',
   });
 
   // Función para validar el formulario
@@ -119,27 +133,24 @@ export default function EventsPage() {
     
     try {
       if (editingEvent) {
-        const updated = await editEvent(editingEvent, data);
-        if (updated) {
+        await editEvent(editingEvent, data);
           toast.success('Evento actualizado exitosamente');
-          resetForm();
-        }
+        resetForm();
       } else {
-        const created = await createEvent(data);
-        if (created) {
+        await createEvent(data);
           toast.success('Evento registrado exitosamente');
-          resetForm();
-        }
+        resetForm();
       }
-    } catch {
-      toast.error('Error al procesar el evento');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Error al procesar el evento';
+      toast.error(errorMessage);
     }
   };
 
   // Función para resetear el formulario
   const resetForm = () => {
-    setIsDialogOpen(false);
-    setEditingEvent(null);
+          setIsDialogOpen(false);
+          setEditingEvent(null);
     setFormData({
       name: '',
       location: '',
@@ -170,15 +181,65 @@ export default function EventsPage() {
     
     setIsClosingEvent(true);
     try {
-      const closed = await closeEvent(eventToClose);
-      if (closed) {
-        toast.success('Evento cerrado exitosamente');
-      }
-    } catch {
-      toast.error('Error al cerrar el evento');
+      await closeEvent(eventToClose);
+      toast.success('Evento cerrado exitosamente');
+      setShowCloseDialog(false);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Error al cerrar el evento';
+      toast.error(errorMessage);
     } finally {
       setIsClosingEvent(false);
       setEventToClose(null);
+      setHoldProgress(0);
+      setIsHolding(false);
+    }
+  };
+
+  // Handlers para el botón de mantener presionado
+  const handleHoldStart = () => {
+    if (isClosingEvent) return;
+    setIsHolding(true);
+    setHoldProgress(0);
+    
+    const interval = setInterval(() => {
+      setHoldProgress(prev => {
+        const newProgress = prev + (100 / 60); // 3 segundos = 60 intervalos de 50ms para más suavidad
+        if (newProgress >= 100) {
+          clearInterval(interval);
+          handleConfirmCloseEvent();
+          return 100;
+        }
+        return newProgress;
+      });
+    }, 50); // Intervalo más pequeño para mayor suavidad
+    
+    holdIntervalRef.current = interval;
+  };
+
+  const handleHoldEnd = () => {
+    setIsHolding(false);
+    setHoldProgress(0);
+    if (holdIntervalRef.current) {
+      clearInterval(holdIntervalRef.current);
+      holdIntervalRef.current = null;
+    }
+  };
+
+  // Handler para abrir el dialog de cierre
+  const handleOpenCloseDialog = (eventId: number) => {
+    setEventToClose(eventId);
+    setShowCloseDialog(true);
+  };
+
+  // Handler para cerrar el dialog y resetear estados
+  const handleCloseDialog = () => {
+    setShowCloseDialog(false);
+    setEventToClose(null);
+    setHoldProgress(0);
+    setIsHolding(false);
+    if (holdIntervalRef.current) {
+      clearInterval(holdIntervalRef.current);
+      holdIntervalRef.current = null;
     }
   };
 
@@ -206,6 +267,59 @@ export default function EventsPage() {
     return event?.name || 'evento';
   };
 
+  // Determinar si un evento puede ser cerrado
+  const canCloseEvent = (event: typeof events[number]) => {
+    // No puede cerrar si ya está cerrado manualmente
+    if (event.state === 'CLOSED') return false;
+    
+    // Puede cerrar si el evento está activo (status ACTIVE) o si ya pasó la fecha de fin
+    const now = new Date();
+    const startDate = new Date(event.startDate);
+    
+    // Puede cerrar si:
+    // 1. El evento ya inició (está ACTIVE o ya pasó la fecha de fin)
+    // 2. No está cerrado manualmente
+    return now >= startDate;
+  };
+
+  // Función para aplicar filtros
+  const filteredEvents = events.filter(event => {
+    // Filtro por término de búsqueda
+    if (filters.searchTerm && !event.name.toLowerCase().includes(filters.searchTerm.toLowerCase())) {
+      return false;
+    }
+    
+    // Filtro por status
+    if (filters.status !== 'all' && event.status !== filters.status) {
+      return false;
+    }
+    
+    // Filtro por estado
+    if (filters.state !== 'all' && event.state !== filters.state) {
+      return false;
+    }
+    
+    // Filtro por ubicación
+    if (filters.location !== 'all' && event.location !== filters.location) {
+      return false;
+    }
+    
+    return true;
+  });
+
+  // Función para limpiar filtros
+  const clearAllFilters = () => {
+    setFilters({
+      searchTerm: '',
+      status: 'all',
+      state: 'all',
+      location: 'all',
+    });
+  };
+
+  // Verificar si hay filtros activos
+  const hasActiveFilters = filters.searchTerm || filters.status !== 'all' || filters.state !== 'all' || filters.location !== 'all';
+
   return (
     <SidebarProvider
       style={{
@@ -220,8 +334,8 @@ export default function EventsPage() {
           <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 px-4 lg:px-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div>
-                <h2 className="text-2xl font-bold text-white">Gestión de Eventos</h2>
-                <p className="text-gray-200">Administra los eventos/ferias registrados</p>
+                <h2 className="text-2xl font-bold text-black">Gestión de Eventos</h2>
+                <p className="text-gray-900">Administra los eventos/ferias registrados</p>
               </div>
               <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogTrigger asChild>
@@ -238,7 +352,7 @@ export default function EventsPage() {
                   </DialogHeader>
                   <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="name">Nombre del Evento</Label>
+                      <Label htmlFor="name">Nombre del Evento <span className='text-red-500'>*</span></Label>
                       <Input
                         id="name"
                         type="text"
@@ -249,7 +363,7 @@ export default function EventsPage() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="location">Ubicación</Label>
+                      <Label htmlFor="location" >Ubicación<span className='text-red-500'>*</span></Label>
                       <Input
                         id="location"
                         type="text"
@@ -261,20 +375,22 @@ export default function EventsPage() {
 
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="startDate">Fecha de Inicio</Label>
+                        <Label htmlFor="startDate">Fecha de Inicio<span className='text-red-500'>*</span></Label>
                         <Input
                           id="startDate"
                           type="date"
+                          min={new Date().toISOString().split('T')[0]}
                           value={formData.startDate}
                           onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
                         />
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="endDate">Fecha de Fin</Label>
+                        <Label htmlFor="endDate">Fecha de Fin<span className='text-red-500'>*</span></Label>
                         <Input
                           id="endDate"
                           type="date"
+                          min={formData.startDate || new Date().toISOString().split('T')[0]}
                           value={formData.endDate}
                           onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
                         />
@@ -312,10 +428,10 @@ export default function EventsPage() {
                     </div>
 
                     <div className="flex justify-end space-x-2">
-                      <Button type="button" variant="outline" onClick={resetForm}>
+                      <Button type="button" onClick={resetForm}>
                         Cancelar
                       </Button>
-                      <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
+                      <Button type="submit" className="bg-blue-600 hover:bg-blue-900">
                         {editingEvent ? 'Actualizar' : 'Crear'}
                       </Button>
                     </div>
@@ -324,6 +440,90 @@ export default function EventsPage() {
               </Dialog>
             </div>
 
+            {/* Filtros */}
+            <Card className="bg-white/100 backdrop-blur-sm border border-gray-200">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg flex items-center gap-2 mb-0">
+                    <Filter className="h-5 w-5" />
+                    Filtros
+                  </CardTitle>
+                  {hasActiveFilters && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={clearAllFilters}
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                    >
+                      <X className="h-4 w-4 mr-1" />
+                      Limpiar Filtros
+                    </Button>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 ">
+                  <div className="space-y-2 min-w-0">
+                    <Label htmlFor="search" className="text-sm font-medium">Buscar por nombre</Label>
+                    <Input
+                      id="search"
+                      value={filters.searchTerm}
+                      onChange={(e) => setFilters(prev => ({ ...prev, searchTerm: e.target.value }))}
+                      placeholder="Buscar eventos..."
+                      className="w-full h-10"
+                    />
+                  </div>
+                  <div className="space-y-2 min-w-0">
+                    <Label htmlFor="statusFilter" className="text-sm font-medium">Filtrar por Estado</Label>
+                    <Select value={filters.status} onValueChange={(value) => setFilters(prev => ({ ...prev, status: value }))}>
+                      <SelectTrigger className="w-full h-10">
+                        <SelectValue placeholder="Todos los estados" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos los estados</SelectItem>
+                        <SelectItem value="SCHEDULED">Programado</SelectItem>
+                        <SelectItem value="ACTIVE">Activo</SelectItem>
+                        <SelectItem value="CLOSED">Cerrado</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2 min-w-0">
+                    <Label htmlFor="stateFilter" className="text-sm font-medium">Filtrar por Situación</Label>
+                    <Select value={filters.state} onValueChange={(value) => setFilters(prev => ({ ...prev, state: value }))}>
+                      <SelectTrigger className="w-full h-10">
+                        <SelectValue placeholder="Todas las situaciones" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todas las situaciones</SelectItem>
+                        <SelectItem value="SCHEDULED">Programado</SelectItem>
+                        <SelectItem value="CLOSED">Cerrado manualmente</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2 min-w-0">
+                    <Label htmlFor="locationFilter" className="text-sm font-medium">Filtrar por Ubicación</Label>
+                    <Select value={filters.location} onValueChange={(value) => setFilters(prev => ({ ...prev, location: value }))}>
+                      <SelectTrigger className="w-full h-10">
+                        <SelectValue placeholder="Todas las ubicaciones">
+                          <span className="truncate">
+                            {filters.location === 'all' ? 'Todas las ubicaciones' : filters.location}
+                          </span>
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent className="max-w-[280px]">
+                        <SelectItem value="all">Todas las ubicaciones</SelectItem>
+                        {getUniqueLocations().map((location) => (
+                          <SelectItem key={location} value={location} className="truncate">
+                            {location}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Lista de eventos */}
             <div className="grid gap-4 md:gap-6">
               {loading ? (
@@ -331,15 +531,20 @@ export default function EventsPage() {
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                   <span className="ml-2 text-gray-600">Cargando eventos...</span>
                 </div>
-              ) : !Array.isArray(events) || events.length === 0 ? (
-                <Card className="bg-white/90 backdrop-blur-sm">
+              ) : !Array.isArray(filteredEvents) || filteredEvents.length === 0 ? (
+                <Card className="bg-white/90 backdrop-blur-md">
                   <CardContent className="flex flex-col items-center justify-center h-32">
                     <Calendar className="h-12 w-12 text-gray-400 mb-4" />
-                    <p className="text-gray-500 text-center">No hay eventos registrados</p>
+                    <p className="text-gray-500 text-center">
+                      {events.length === 0 
+                        ? "No hay eventos registrados"
+                        : "No hay eventos que coincidan con los filtros seleccionados"
+                      }
+                    </p>
                   </CardContent>
                 </Card>
               ) : (
-                Array.isArray(events) && events.map((event) => (
+                Array.isArray(filteredEvents) && filteredEvents.map((event) => (
                   <Card key={event.id} className="bg-white/90 backdrop-blur-sm">
                     <CardContent className="p-6">
                       <div className="flex justify-between items-start">
@@ -351,9 +556,19 @@ export default function EventsPage() {
                                 Cerrado
                               </span>
                             )}
-                            {event.state === 'ACTIVE' && (
+                            {event.status === 'ACTIVE' && (
                               <span className="px-2 py-1 bg-green-200 text-green-800 text-xs rounded-full">
                                 Activo
+                              </span>
+                            )}
+                            {event.status === 'CLOSED' && event.state !== 'CLOSED' && (
+                              <span className="px-2 py-1 bg-yellow-200 text-yellow-800 text-xs rounded-full">
+                                Finalizado
+                              </span>
+                            )}
+                            {event.status === 'SCHEDULED' && (
+                              <span className="px-2 py-1 bg-blue-200 text-blue-800 text-xs rounded-full">
+                                Programado
                               </span>
                             )}
                           </div>
@@ -377,43 +592,33 @@ export default function EventsPage() {
                         </div>
                         <div className="flex flex-col gap-2">
                           <div className="flex gap-2">
-                            <Button
-                              variant="default"
-                              size="sm"
-                              onClick={() => handleEdit(event)}
+                        <Button
+                          size="sm"
+                          onClick={() => handleEdit(event)}
                               disabled={event.state === 'CLOSED'}
-                              className="text-blue-600 border-1 border-blue-600 hover:bg-blue-600 hover:text-white transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              <Edit2 className="h-4 w-4" />
-                            </Button>
+                              className="text-white bg-blue-600 border-1 border-blue-600 hover:bg-blue-800 hover:text-white transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </Button>
                             <Button
-                              variant="default"
-                              size="sm"
-                              onClick={() => handleViewSummary(event.id)}
-                              className="text-green-600 border-1 border-green-600 hover:bg-green-600 hover:text-white transition-colors duration-200"
-                            >
-                              <TrendingUp className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="default"
                               size="sm"
                               onClick={() => handleDownloadPdf(event.id)}
-                              className="text-purple-600 border-1 border-purple-600 hover:bg-purple-600 hover:text-white transition-colors duration-200"
+                              className="text-white bg-green-600 border-1 border-green-600 hover:bg-green-800 hover:text-white transition-colors duration-200"
                             >
                               <FileText className="h-4 w-4" />
                             </Button>
                           </div>
-                          {event.state === 'ACTIVE' && (
-                            <AlertDialog>
+                          {canCloseEvent(event) && (
+                            <AlertDialog open={showCloseDialog && eventToClose === event.id} onOpenChange={(open) => !open && handleCloseDialog()}>
                               <AlertDialogTrigger asChild>
-                                                                  <Button
-                                                                  variant="default"
-                                    size="sm"
-                                    onClick={() => setEventToClose(event.id)}
-                                    className="text-red-600 border-red-600 border-1  hover:bg-red-600 hover:text-white transition-colors duration-200"
-                                  >
-                                    Cerrar Evento
-                                  </Button>
+                                <Button
+                                  variant="default"
+                                  size="sm"
+                                  onClick={() => handleOpenCloseDialog(event.id)}
+                                  className="text-white bg-red-500 border-red-600 border-1  hover:bg-red-800 hover:text-white transition-colors duration-200"
+                                >
+                                  Cerrar Evento
+                                </Button>
                               </AlertDialogTrigger>
                               <AlertDialogContent>
                                                                  <AlertDialogHeader>
@@ -421,13 +626,13 @@ export default function EventsPage() {
                                      <AlertTriangle className="h-5 w-5 text-red-500" />
                                      Confirmar Cierre del Evento
                                    </AlertDialogTitle>
-                                   <div className="space-y-4">
+                                   <div className="space-y-2">
                                      <AlertDialogDescription>
                                        ¿Estás seguro de que quieres cerrar el evento <strong>&quot;{getEventNameToClose()}&quot;</strong>?
                                      </AlertDialogDescription>
                                      
                                      <div className="bg-red-50 border border-red-200 rounded-md p-3">
-                                       <p className="text-sm text-red-800 font-medium mb-2">
+                                       <p className="text-sm text-red-800 font-medium">
                                          Esta acción <strong>no se puede deshacer</strong> y tendrá las siguientes consecuencias:
                                        </p>
                                        <ul className="list-disc list-inside text-sm text-red-700 space-y-1">
@@ -438,23 +643,43 @@ export default function EventsPage() {
                                      </div>
                                    </div>
                                  </AlertDialogHeader>
+                                 <div className='text-xs text-gray-600 '>Manten presionado el botón para cerrar el evento</div>
                                 <AlertDialogFooter>
-                                  <AlertDialogCancel onClick={() => setEventToClose(null)}>
+                                  <AlertDialogCancel className='hover:bg-black/70' onClick={() => handleCloseDialog()}>
                                     Cancelar
                                   </AlertDialogCancel>
                                   <AlertDialogAction
-                                    onClick={handleConfirmCloseEvent}
+                                    onMouseDown={handleHoldStart}
+                                    onMouseUp={handleHoldEnd}
+                                    onMouseLeave={handleHoldEnd}
+                                    onTouchStart={handleHoldStart}
+                                    onTouchEnd={handleHoldEnd}
                                     disabled={isClosingEvent}
-                                    className="bg-red-600 text-white hover:bg-red-700 focus:ring-red-500 focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
+                                    className="relative overflow-hidden bg-red-600 text-white hover:bg-red-700 focus:ring-red-500 focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
                                   >
-                                    {isClosingEvent ? (
-                                      <>
-                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                        Cerrando...
-                                      </>
-                                    ) : (
-                                      'Sí, Cerrar Evento'
-                                    )}
+                                    {/* Barra de progreso */}
+                                    <div 
+                                      className="absolute inset-0 bg-white transition-all duration-75 ease-out"
+                                      style={{ 
+                                        width: `${holdProgress}%`,
+                                        opacity: isHolding ? 0.3 : 0,
+                                        transform: 'translateZ(0)', // Para activar aceleración por hardware
+                                      }}
+                                    />
+                                    
+                                    {/* Contenido del botón */}
+                                    <span className="relative z-10">
+                                      {isClosingEvent ? (
+                                        <>
+                                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                          Cerrando...
+                                        </>
+                                      ) : isHolding ? (
+                                        'Mantén presionado...'
+                                      ) : (
+                                        'Sí, Cerrar Evento'
+                                      )}
+                                    </span>
                                   </AlertDialogAction>
                                 </AlertDialogFooter>
                               </AlertDialogContent>

@@ -13,6 +13,10 @@ export const ProductSchema = z.object({
   event: z.object({
     id: z.number(),
     name: z.string(),
+    startDate: z.string().optional(),
+    endDate: z.string().optional(),
+    state: z.string().optional(),
+    status: z.string().optional(),
   }).optional(),
   artisan: z.object({
     id: z.number(),

@@ -15,7 +15,7 @@ model Event {
   endDate               DateTime
   commissionAssociation Float
   commissionSeller      Float
-  state                 EventState @default(ACTIVE)
+  state                 EventState @default(SCHEDULED)
 
   products              Product[]
   sales                 Sale[]

@@ -16,6 +16,7 @@ export enum MovementType {
 }
 
 export enum EventState {
+  SCHEDULED = 'SCHEDULED',
   ACTIVE = 'ACTIVE',
   CLOSED = 'CLOSED',
 }

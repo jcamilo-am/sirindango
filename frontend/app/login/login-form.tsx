@@ -131,9 +131,9 @@ export function LoginForm({
         pauseOnHover 
         theme="colored"
       />
-      <Card className="w-full max-w-md mx-auto backdrop-blur-sm bg-black/95">
+      <Card className="w-full max-w-md mx-auto backdrop-blur-sm bg-white/95 border border-gray-200">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold text-turquoise-light tracking-wide">
+          <CardTitle className="text-2xl font-bold text-gray-800 tracking-wide">
             SIRINDANGO
           </CardTitle>
         </CardHeader>
@@ -154,7 +154,7 @@ export function LoginForm({
                   value={formData.username}
                   onChange={(e) => handleInputChange('username', e.target.value)}
                   className={cn(
-                    "pl-10 bg-gray-50 border-gray-200 text-white placeholder:text-gray-400",
+                    "pl-10 bg-white border-gray-300 text-gray-900 placeholder:text-gray-500",
                     fieldErrors.username && "border-red-500 focus:border-red-500"
                   )}
                   disabled={loading}
@@ -180,7 +180,7 @@ export function LoginForm({
                   value={formData.password}
                   onChange={(e) => handleInputChange('password', e.target.value)}
                   className={cn(
-                    "pl-10 pr-10 bg-gray-50 border-gray-200 text-white placeholder:text-gray-400",
+                    "pl-10 pr-10 bg-white border-gray-300 text-gray-900 placeholder:text-gray-500",
                     fieldErrors.password && "border-red-500 focus:border-red-500"
                   )}
                   disabled={loading}
