@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: sirindango-backend
+    runtime: node
+    buildCommand: npm install && npx prisma generate && npm run build
+    startCommand: npm run start:prod

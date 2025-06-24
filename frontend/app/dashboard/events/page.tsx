@@ -41,7 +41,6 @@ export default function EventsPage() {
     createEvent,
     editEvent,
     closeEvent,
-    getEventSummary,
     downloadEventAccountingPdf,
     getUniqueLocations,
   } = useEvents();
@@ -244,14 +243,14 @@ export default function EventsPage() {
   };
 
   // Handler para ver resumen
-  const handleViewSummary = async (eventId: number) => {
-    const summary = await getEventSummary(eventId);
-    if (summary) {
-      // Aquí podrías abrir un modal con el resumen o navegar a otra página
-      console.log('Resumen del evento:', summary);
-      toast.info('Funcionalidad de resumen disponible en consola');
-    }
-  };
+  // const handleViewSummary = async (eventId: number) => {
+  //   const summary = await getEventSummary(eventId);
+  //   if (summary) {
+  //     // Aquí podrías abrir un modal con el resumen o navegar a otra página
+  //     console.log('Resumen del evento:', summary);
+  //     toast.info('Funcionalidad de resumen disponible en consola');
+  //   }
+  // };
 
   // Handler para descargar PDF
   const handleDownloadPdf = async (eventId: number) => {

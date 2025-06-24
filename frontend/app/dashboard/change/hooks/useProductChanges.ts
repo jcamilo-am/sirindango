@@ -150,7 +150,7 @@ export function useProductChanges() {
       // Por ejemplo, verificar el estado de la venta, el evento, etc.
       
       return { canChange: true };
-    } catch (err) {
+    } catch {
       return {
         canChange: false,
         reason: 'Error al validar disponibilidad de cambio'

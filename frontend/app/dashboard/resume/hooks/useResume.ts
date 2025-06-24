@@ -33,7 +33,7 @@ export function useResume({ events, sales, artisans, isLoading }: UseResumeProps
     try {
       const summaries = events.map(event => {
         const eventSales = sales.filter(sale => sale.eventId === event.id);
-        const totalRevenue = eventSales.reduce((sum, sale) => sum + sale.totalAmount, 0);
+        const totalRevenue = eventSales.reduce((sum, sale) => sum + (sale.totalAmount ?? 0), 0);
         const totalProducts = eventSales.reduce((sum, sale) => sum + sale.quantitySold, 0);
         const uniqueArtisans = new Set(eventSales.map(sale => sale.artisanId)).size;
         const salesCount = eventSales.length;
@@ -76,7 +76,7 @@ export function useResume({ events, sales, artisans, isLoading }: UseResumeProps
         });
       }
       const group = grouped.get(sale.artisanId)!;
-      group.totalRevenue += sale.totalAmount;
+      group.totalRevenue += sale.totalAmount ?? 0;
       group.totalProducts += sale.quantitySold;
       group.sales.push(sale);
     });

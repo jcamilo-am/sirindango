@@ -2,19 +2,19 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { AuthService } from '@/lib/auth';
+import { AuthService, User } from '@/lib/auth';
 
 interface UseAuthReturn {
   isAuthenticated: boolean;
   isLoading: boolean;
-  user: any | null;
+  user: User | null;
   logout: () => void;
 }
 
 export function useAuth(): UseAuthReturn {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState<User | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -28,7 +28,7 @@ export function useAuth(): UseAuthReturn {
       
       setIsAuthenticated(authStatus);
       setUser(userData);
-    } catch (error) {
+    } catch {
       // Si hay error al verificar, asumir no autenticado
       setIsAuthenticated(false);
       setUser(null);

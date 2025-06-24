@@ -12,7 +12,12 @@ async function bootstrap() {
 
   // Configurar CORS detallado
   app.enableCors({
-    origin: '*', // Permite todas las origenes
+    origin: [
+      'http://localhost:3000',
+      'https://localhost:3000',
+      'https://localhost:3001',
+      process.env.FRONTEND_URL || '*',
+    ], // Permite todas las origenes
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     allowedHeaders: 'Content-Type, Accept, Authorization',
     credentials: true,
@@ -27,7 +32,7 @@ async function bootstrap() {
   const reflector = app.get(Reflector);
   app.useGlobalGuards(new JwtAuthGuard(reflector));
 
-  await app.listen(port);
-  Logger.log(`Server is running on http://localhost:${port}`, 'Bootstrap');
+  await app.listen(port, '0.0.0.0');
+  Logger.log(`Server is running on port ${port}`, 'Bootstrap');
 }
 bootstrap();

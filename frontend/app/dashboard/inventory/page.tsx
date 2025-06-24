@@ -54,7 +54,7 @@ export default function InventoryPage() {
   // Cargar productos al montar
   useEffect(() => {
     fetchProducts();
-  }, []);
+  }, [fetchProducts]);
 
   // Manejar cambios en el formulario
   const handleInputChange = (field: keyof CreateInventoryMovement, value: string | number | MovementType) => {

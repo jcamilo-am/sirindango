@@ -198,7 +198,6 @@ export function useEvents() {
   // Cargar eventos automáticamente al montar el hook
   useEffect(() => {
     fetchEvents();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Funciones auxiliares para filtrado
