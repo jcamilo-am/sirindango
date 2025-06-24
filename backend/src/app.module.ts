@@ -13,6 +13,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { ProductChangeModule } from './modules/poduct-changes/product-change.module';
 import { PdfMakeService } from './common/pdf/pdfmake.service';
 import { InventoryMovementModule } from './modules/inventory-movements/inventory-movement.module';
+import { AppController } from './app.controller';
 
 @Module({
   imports: [
@@ -30,7 +31,7 @@ import { InventoryMovementModule } from './modules/inventory-movements/inventory
     ProductChangeModule,
     InventoryMovementModule
   ],
-  controllers: [],
+  controllers: [AppController],
   providers: [
     {
     provide: 'APP_PIPE',
