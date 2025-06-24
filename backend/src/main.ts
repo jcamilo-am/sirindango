@@ -15,6 +15,8 @@ async function bootstrap() {
     origin: [
       'http://localhost:3000',
       'https://localhost:3000',
+      'https://sirindango-app.netlify.app',
+      'https://*.netlify.app', // Permite cualquier subdominio de netlify
       process.env.FRONTEND_URL,
     ].filter(Boolean), // Filtra valores undefined/null
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
